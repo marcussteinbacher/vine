@@ -2,6 +2,7 @@
 *.log
 *.Identifier
 **/.ipynb_checkpoints/
+!data/.gitkeep
 
 __pycache__
 _marimo

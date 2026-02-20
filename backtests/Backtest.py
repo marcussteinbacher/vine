@@ -8,7 +8,7 @@ from typing import Union
 from numpy.typing import NDArray
 
 
-def duration_test(violations:pd.Series, conf_level:float=0.95) -> dict:
+def duration_test(violations:Union[pd.Series,NDArray], conf_level:float=0.95) -> dict:
     """
     Perform the Christoffersen and Pelletier Test (2004) called Duration Test.
     The main objective is to know if the VaR model responds quickly to market movementsin order to do not form volatility clusters.
@@ -29,16 +29,16 @@ def duration_test(violations:pd.Series, conf_level:float=0.95) -> dict:
         answer (dict):       statistics and decision of the test
     """
     typeok = False
-    if isinstance(violations, pd.Series) or isinstance(violations, pd.DataFrame):
-        violations = violations.values.flatten()
+    if isinstance(violations, pd.Series):
+        violations = violations.to_numpy().flatten()
         typeok = True
-    elif isinstance(violations, NDArray):
+    elif isinstance(violations, np.ndarray):
         violations = violations.flatten()
         typeok = True
     elif isinstance(violations, list):
         typeok = True
     if not typeok:
-        raise ValueError("Input must be list, array, series or dataframe.")
+        raise ValueError("Input must be array, series or list.")
 
     N = int(sum(violations))
     first_hit = violations[0]
@@ -152,8 +152,7 @@ def failure_rate(violations:pd.Series) -> dict:
 
 def simple_hits(actual:Union[pd.Series,NDArray],var:Union[pd.Series, NDArray])->Union[pd.Series,NDArray]:
     """
-    Returns a boolean Series of hits where the actual returns exceed the VaR. 
-    On overlapping dates that are not nan.
+    Returns a boolean Series of hits where the actual returns exceed the VaR.
     """
     if isinstance(actual, pd.Series):
         index = actual.dropna().index.intersection(var.dropna().index)
