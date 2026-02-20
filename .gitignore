@@ -2,7 +2,6 @@
 *.log
 *.Identifier
 **/.ipynb_checkpoints/
-!data/.gitkeep
 
 __pycache__
 _marimo
@@ -10,5 +9,6 @@ _marimo
 .vscode
 assets
 data/*
+!data/.gitkeep
 export
 temp/*
