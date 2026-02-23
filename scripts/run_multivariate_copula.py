@@ -86,8 +86,7 @@ print(f"Starting {SIM} {' & '.join(params.simulation.risk_metric)} with paramete
 print(params)
 
 
-
-logging.basicConfig(filename=f'./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logging.info("STARTING CALCULATION\n"
              + "-" * 50
@@ -125,7 +124,11 @@ match args.copula:
     case "Gaussian":
         copula_cls = cp.GaussianCopula
     case "Student":
-        copula_cls = cp.StudentCopula
+        # Little overhead high-speed implementation for 'itau'
+        if params.fit_method == "itau":
+            copula_cls = MultivariateCopula.MultivariateStudent
+        else:
+            copula_cls = cp.StudentCopula # copulae
     case "Empirical":
         copula_cls = cp.EmpiricalCopula
     case "Clayton":
@@ -150,6 +153,7 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.chunk_size),
     # Concurrent calculation 
     with ProcessPoolExecutor() as p:
         results = list(tqdm(p.map(partial(MultivariateCopula.simulate,copula_cls=copula_cls,margin_dist=args.margin_distribution,n_samples=args.n,method=args.fit_method,alpha=args.alpha,**args.controls),chunk), total=len(chunk), leave=False))
+    
     
     # Transforming results
     cop_res, var, es = zip(*results)
@@ -188,6 +192,6 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.chunk_size),
 end = time.perf_counter()
 
 print(f"Calculation completed in {end-start:.2f} seconds!")
-print(f"Run `build_risk_dataframes.py` to aggregate temporary results.")
+print("Run `build_risk_dataframes.py` to aggregate temporary results.")
 
 logging.info(f"Calculation completed in {end-start:.2f} seconds!")

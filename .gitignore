@@ -2,6 +2,7 @@
 *.log
 *.Identifier
 **/.ipynb_checkpoints/
+test.py
 
 __pycache__
 _marimo
