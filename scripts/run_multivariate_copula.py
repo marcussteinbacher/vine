@@ -125,7 +125,7 @@ match args.copula:
         copula_cls = cp.GaussianCopula
     case "Student":
         # Little overhead high-speed implementation for 'itau'
-        if params.fit_method == "itau":
+        if args.fit_method == "itau":
             copula_cls = MultivariateCopula.MultivariateStudent
         else:
             copula_cls = cp.StudentCopula # copulae

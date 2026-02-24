@@ -9,8 +9,8 @@ from tools.KendallTau import correlation_matrix as itau_correlation_matrix, make
 import scipy.stats as stats
 from copulae.stats import multivariate_t as mvt, t
 from copulae.types import Numeric
-import types
-import pycop as pc
+#import types
+#import pycop as pc
 import pandas as pd
 from scipy.linalg import cholesky
 

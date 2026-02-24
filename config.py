@@ -1,5 +1,5 @@
 # All created portfolios
-PORTFOLIOS = [20, 50, 100, 200, 500, 1000, 1500]
+PORTFOLIOS = [20, 30, 50, 100, 200, 500, 1000, 1500]
 
 # Volatility forecast settings
 VOLATILITYMODELS = ["Garch","Egarch","GJR"]
@@ -12,5 +12,3 @@ MULTIVARIATECOPULAS = ["Gaussian","Student","Empirical","Clayton","Frank","Gumbe
 MARGINDISTRIBUTIONS = ["Normal","StudentsT","Empirical","Pareto"]
 
 VINECOPFAMILIES = ["Gaussian","Student","Clayton","Frank","Gumbel","Joe","Independent","BB1","BB6","BB7","BB8","Tawn","TLL"]
-
-
