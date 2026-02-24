@@ -5,9 +5,7 @@ import copulae as cp
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from tqdm import tqdm
-from models import AdjustedReturn, VineCopula
-from tools.Transformations import antithetic_variates, ppf_transform
-import pyvinecopulib as pvc
+from models import AdjustedReturn, MultivariateCopula
 import time
 import json
 import config
@@ -15,23 +13,10 @@ import sys
 import itertools
 import logging
 import pickle as pkl
-from tools.Helpers import Parameters, StoreDict, chunks, save_checkpoint, get_checkpoint
+from tools.Helpers import Parameters, chunks, StoreDict, get_checkpoint, save_checkpoint
 
 
-defaults = dict(
-    parametric_method="itau", 
-    family_set=[],
-    selection_criterion="mbicv",
-    #trunc_lvl = 7,
-    preselect_families=True, # whether to exclude families based on symmetry of the data
-    select_trunc_lvl=False,
-    select_families=True, # select automatically if not given in family_set
-    select_threshold=True, # automatically select threshold for thresholded vines
-    num_threads=4
-    )
-
-
-SIM = "VineCopula"
+SIM = "MultivariateCopula"
 
 parser = argparse.ArgumentParser(description=f"Calculate the {SIM} risk forecasts (VaR/ES). For intense computations writes the batch-wise calculated risk forecasts in temp/portfolio. Afterwords, run `build_risk_dataframe.py` to aggregate the temporary files into a single DataFrame. Writes three objects, the fitted copula parameters in each window, the series of VaR forecasts, and the series of ES forecasts.")
 
@@ -39,16 +24,15 @@ parser.add_argument("-p","--portfolio", choices=config.PORTFOLIOS, type=int,requ
 
 # Volatility model params
 parser.add_argument("-vm","--volatility_model", choices=config.VOLATILITYMODELS, type=str,required=True,help="Choose the volatility process for the constant mean model.")
-parser.add_argument("-id","--innovation_distribution", choices=config.INNOVATIONDISTRIBUTIONS, type=str,required=True,help="Choose the volatility model's innovation distribution.")
+parser.add_argument("-id","--innovation_distribution", choices=config.INNOVATIONDISTRIBUTIONS, type=str,required=True,help="Choose the volatility porcesse's innovation distribution.")
 
 # Mutlivariate copula params
-parser.add_argument("-cf","--copula_families",nargs='+',choices=config.VINECOPFAMILIES,required=False,default=[],type=str,help="Restrict the set of bivariate copulas that can be used to predict VaR/ES. Deault: Empty, all families can be used.")
+parser.add_argument("-cp","--copula",choices=config.MULTIVARIATECOPULAS,required=True,type=str,help="Set a multivariate copula the simulate VaR and ES.")
 parser.add_argument("-md","--margin_distribution",choices=config.MARGINDISTRIBUTIONS,required=True,type=str,help="Set the margin distribution. Used to re-transform the uniformly distributed copula random samples.")
 parser.add_argument("-n",type=int,required=False,default=100_000,help="Number of random samples drawn from copula to simulate VaR/ES. Default: 100_000")
-parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
+parser.add_argument("-fm","--fit_method",type=str,required=False,default="ml",choices=["ml","itau","irho"],help="Choose the copula fitting method. Default: ml. Info: Ignored for EmpiricalCopula which doesn't need fitting.")
 
-# Vine controls
-parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, select_threshold=True, num_threads=4. Example: --controls trunc_lvl=7 preselect_families=True. Check pyvinecopulib.FitControlsVinecop for details.")
+parser.add_argument("--controls",nargs='+',required=False,default={},action=StoreDict,help="Set additional copula parameters to be passed to MultivariateCopula.simulate, e.g. --controls df=3 df_fixed=True for a StudentCopula with fixed 3 degrees of freedom. Or, in case of StudentsT margins, f0=3 to exclude the degree of freedom parameter from being estimated in the re-transformation.")
 
 # Risk metric params
 parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -60,21 +44,13 @@ parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help
 parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 # Save frequency
-parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save the vine copula object to disk every save_frequency windows. Default: -1, no saving.")
-
-# Concurrent calculation
-parser.add_argument("--sequential", action="store_true",help="Wether to use sequrntial computation. Default: False, uses concurrent computation.")
+parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save the fitted multivariate copula object to disk every save_frequency windows. Default: -1, no saving.")
 
 args = parser.parse_args()
 
-args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+args.simulation = SIM
 
-# VineCopula controls
-defaults.update(args.controls)
-defaults["family_set"] = VineCopula.build_family_set(args.copula_families)
-controls = pvc.FitControlsVinecop(**defaults)
-
-# Collecting all arguments into params
+# Collectin all arguments into params
 _params = {"portfolio":args.portfolio,
           "volatility": {
               "mean_model":"ConstantMean",
@@ -82,7 +58,8 @@ _params = {"portfolio":args.portfolio,
               "innovation_distribution":args.innovation_distribution
             },
             "simulation": {
-                "name":SIM,
+                "name":args.simulation,
+                "copula":args.copula,
                 "margin_distribution":args.margin_distribution,
                 "n":args.n,
                 "fit_method":args.fit_method,
@@ -97,10 +74,10 @@ _params = {"portfolio":args.portfolio,
                 "from":args.start,
                 "to":args.stop,
                 "save_freq":args.save_freq,
-                "parallel": not args.sequential,
-                "resume": args.resume
+                "parallel":True,
+                "resume":args.resume
             },
-            "controls": VineCopula.get_controls(controls)
+            "controls":args.controls
         }
 
 params = Parameters(_params)
@@ -112,17 +89,16 @@ logging.basicConfig(filename='./log/risk_forecasts.log', level=logging.INFO, for
 
 logging.info("STARTING CALCULATION\n"
              + "-" * 50
-             + f"\n{SIM} with parameters:"
+             + f"\n{args.simulation} with parameters:"
              + "\n" + str(params)
              + "\n" + "-" * 50)
-
 
 # Saving parameters to temp to be used to build volatility DataFrames and to automatically resume calculation (not implemented yet)
 with open("temp/params.json","wt") as f:
     json.dump(params.dict,f,indent=4)
 
 print("Importing data...")
-returns = pd.read_parquet(f"data/{args.portfolio}/portfolio_returns.parquet")
+returns = pd.read_parquet(f"data/{params.portfolio}/portfolio_returns.parquet")
 volatilities = pd.read_parquet(f"data/{params.portfolio}/{params.volatility.volatility_model}/{params.volatility.innovation_distribution}/volatility_forecasts.parquet")
 print("Done!")
 
@@ -137,49 +113,40 @@ del returns, volatilities
 windows_indices = windows_indices[args.start:args.stop]
 windows = windows[args.start:args.stop]
 
-
-if args.resume:
-    checkpoint = get_checkpoint()
-    start_chunk_idx = args.start//args.batch_size + checkpoint + 1
-    remaining_chunks = len(windows)//args.batch_size - checkpoint
-else:
-    start_chunk_idx = args.start//args.batch_size
-    remaining_chunks = len(windows)//args.batch_size
+# Start/Stop for distributed computing
+checkpoint = get_checkpoint()
+start_chunk_idx = args.start//args.batch_size + checkpoint + 1
+remaining_chunks = len(windows)//args.batch_size - checkpoint
 
 
-# Save current calculation params to temp to restore for building dataframes or resuming
-with open("temp/params.json","wt") as f:
-    json.dump(params.dict,f,indent=4)
+# Set copula and margin distribution
+match args.copula:
+    case "Gaussian":
+        copula_cls = cp.GaussianCopula
+    case "Student":
+        # Little overhead high-speed implementation for 'itau'
+        if args.fit_method == "itau":
+            copula_cls = MultivariateCopula.MultivariateStudent
+        else:
+            copula_cls = cp.StudentCopula # copulae
+    case "Empirical":
+        copula_cls = cp.EmpiricalCopula
+    case "Clayton":
+        copula_cls = cp.ClaytonCopula
+    case "Gumbel":
+        copula_cls = cp.GumbelCopula
+    case "Frank":
+        copula_cls = cp.FrankCopula
+    case _ as e:
+        raise NotImplementedError(f"Copula {e} not implemented!")
+    
 
-
-def func(window):
-    u = pvc.to_pseudo_obs(window)
-
-    vine = pvc.Vinecop.from_data(u, controls=controls)
-
-    del u 
-
-    sample = antithetic_variates(vine.simulate(args.n), method="1-u")
-    retrans, margin_params = ppf_transform(sample, window, distribution=args.margin_distribution)
-
-    del sample, margin_params
-
-    var = VineCopula.value_at_risk(retrans, alpha=args.alpha)
-    es = VineCopula.expected_shortfall(retrans, alpha=args.alpha)
-
-    del retrans
-
-    return VineCopula.VineCopulaResult(vine), var, es
-
-
-print(f"Calculating {SIM} VaR & ES. Starting with batch {start_chunk_idx}...")
+print(f"Calculating {SIM} {' & '.join(params.simulation.risk_metric)}, Starting with batch {start_chunk_idx}...")
 start = time.perf_counter()
 
 # -----------------
 # START CALCULATION
 # -----------------
-
-concurrent = not args.sequential
 
 for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
 
@@ -187,31 +154,26 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     if args.resume:
         if i <= checkpoint:
             continue
-
-    if concurrent:
-    # Concurrent calculation 
-        with ProcessPoolExecutor() as p:
-            results = list(tqdm(p.map(func,chunk), total=len(chunk), leave=False, desc="Window"))
-    else:
-        results = []
-    # Serial calculation
-        for window in tqdm(chunk):
-            results.append(func(window))
     
-
+    # Concurrent calculation 
+    with ProcessPoolExecutor() as p:
+        results = list(tqdm(p.map(partial(MultivariateCopula.simulate,copula_cls=copula_cls,margin_dist=args.margin_distribution,n_samples=args.n,method=args.fit_method,alpha=args.alpha,**args.controls),chunk), total=len(chunk), leave=False, desc="Window"))
+    
+    
     # Transforming results
-    vine_res, var, es = zip(*results)
+    cop_res, var, es = zip(*results)
 
     del results
 
     vars = np.array(var, dtype=np.float32)
     ess = np.array(es, dtype=np.float32)
 
-    # Save vine in every n-th window
-    win_idx = list(map(lambda x: x + i*args.chunk_size, range(args.chunk_size)))
-    vines = filter(lambda t: t[0]%args.save_freq == 0, zip(win_idx,vine_res))
 
-    del var, es, vine_res
+    # Save copula in every n-th window
+    win_idx = list(map(lambda x: x + i*args.chunk_size, range(args.chunk_size)))
+    cops = filter(lambda t: t[0]%args.save_freq == 0, zip(win_idx,cop_res))
+
+    del var, es, cop_res
 
     # Temporal alignment, set forecast one day into the future
     future_index = [idx[-1] + pd.offsets.BusinessDay(1) for idx in chunk_idx]
@@ -221,22 +183,23 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
 
     del vars, ess
 
+    # SAVE TEMPORARILY
     # Saving chunk-wise to save RAM
     var_series.to_frame(name="var").to_parquet(f"temp/var_{i:03d}.parquet")
     es_series.to_frame(name="es").to_parquet(f"temp/es_{i:03d}.parquet")
+    # write if not empty
+    if dict(cops):
+        pkl.dump(dict(cops), open(f"temp/models_{i:03d}.pkl","wb"))
 
-    d = dict(vines)
-    if d:
-        print("IF",d)
-        pkl.dump(d, open(f"temp/models_{i:03d}.pkl","wb"))
-
-    # Save progress
+    # Save checkpoint
     save_checkpoint(i)
 
-    del var_series, es_series, vines
+    del var_series, es_series, cops
 
 
 end = time.perf_counter()
 
 print(f"Calculation completed in {end-start:.2f} seconds!")
+print("Run `build_risk_dataframes.py` to aggregate temporary results.")
+
 logging.info(f"Calculation completed in {end-start:.2f} seconds!")

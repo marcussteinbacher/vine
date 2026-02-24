@@ -137,14 +137,10 @@ del returns, volatilities
 windows_indices = windows_indices[args.start:args.stop]
 windows = windows[args.start:args.stop]
 
-
-if args.resume:
-    checkpoint = get_checkpoint()
-    start_chunk_idx = args.start//args.batch_size + checkpoint + 1
-    remaining_chunks = len(windows)//args.batch_size - checkpoint
-else:
-    start_chunk_idx = args.start//args.batch_size
-    remaining_chunks = len(windows)//args.batch_size
+# Start/Stop for distributed computing
+checkpoint = get_checkpoint()
+start_chunk_idx = args.start//args.batch_size + checkpoint + 1
+remaining_chunks = len(windows)//args.batch_size - checkpoint
 
 
 # Save current calculation params to temp to restore for building dataframes or resuming

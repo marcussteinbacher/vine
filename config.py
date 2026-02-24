@@ -1,5 +1,5 @@
 # All created portfolios
-PORTFOLIOS = [20, 30, 50, 100, 200, 500, 1000, 1500]
+PORTFOLIOS = [10, 20, 30, 50, 100, 200, 500, 1000, 1500]
 
 # Volatility forecast settings
 VOLATILITYMODELS = ["Garch","Egarch","GJR"]
