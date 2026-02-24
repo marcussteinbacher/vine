@@ -15,6 +15,7 @@ import config
 from tools.Helpers import chunks, StoreDict
 import pickle as pkl
 import sys
+from tools.Helpers import save_checkpoint, get_checkpoint
 
 
 parser = argparse.ArgumentParser(description="Calculate the volatility forecasts. Writes the batch-wise calculated volatility forecasts in temp. Afterwords, run `build_volatility_dataframe.py` to aggregate the temporary files into a single DataFrame.")
@@ -31,14 +32,14 @@ parser.add_argument("--cov_type",choices=["robust","classic"],type=str,default="
 parser.add_argument("--tol",type=int,required=False,default=1e-6,help="Adjust the solver tolerance of `scipy.minimize` SQLSP solver, default 1e-6.")
 parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict, help="Adjust further solver options. Valid entries include 'rescale','ftol', 'eps', 'disp', and 'maxiter'. Example: --controls maxiter=1000 (default). For possible options check scipy SLSQP.")
 
-parser.add_argument("-cs","--chunk_size",type=int,required=False,default=64,help="Set the chunk-size for RAM-intense computations. Calculates chunks of chunk_size windows concurrently and writes the temporary results to disk, then continues with the next chunk_size windows. Default: 64.")
-
 # Concurrent calculation
-parser.add_argument("--sequential", action="store_true",help="Wether to use sequrntial computation. Default: False, uses concurrent computation.")
+parser.add_argument("--sequential", action="store_true",help="Wether to use sequential computation. Default: False, uses concurrent computation.")
 
-# Distributed computing
+# Calculation params
+parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
 parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0, start from the beginning, e.g. with the first window.")
 parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end, e.g until the last window is finished.")
+parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 args = parser.parse_args()
 
@@ -59,10 +60,11 @@ _params = {
               "innovation_distribution":args.innovation_distribution
             },
             "calculation": {
-                "chunk_size":args.chunk_size,
+                "batch_size":args.batch_size,
                 "from":args.start,
                 "to":args.stop,
-                "parallel": not args.sequential
+                "parallel": not args.sequential,
+                "resume": args.resume,
             },
             "controls": controls 
         }
@@ -75,10 +77,10 @@ print(json.dumps(_params, indent=4))
 with open("temp/params.json","wt") as f:
     json.dump(_params, f,indent=4)
 
-sys.exit()
+#sys.exit()
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-logging.basicConfig(filename=f'./log/volatility_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='./log/volatility_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logging.info("\n"
              + "-" * 50
@@ -98,12 +100,9 @@ windows_indices, windows = DefaultSlicer.sliding_window_view(data, size=250)
 windows_indices = windows_indices[args.start:args.stop]
 windows = windows[args.start:args.stop]
 
-# Start/Stop for distributed computing
-start_chunk_idx = args.start//args.chunk_size
-
-# chunk-size
-#chunk_size = 8 * multiprocessing.cpu_count() # 64
-chunk_size = args.chunk_size
+checkpoint = get_checkpoint()
+start_chunk_idx = args.start//args.batch_size + checkpoint + 1
+remaining_chunks = len(windows)//args.batch_size - checkpoint
 
 # Initialize the model
 match (args.volatility_model, args.innovation_distribution):
@@ -152,15 +151,21 @@ def func(window):
     # Apply the volatility forecast column-wise to each window
     return np.apply_along_axis(model.volatility_forecast, axis=0, arr=window)
 
+print(f"Caclulating volatility forecasts. Starting with batch {start_chunk_idx}...")
 
 # Calculate the volatility forecast for each chunk of windows and each window in the chunk concurrently
 start = time.perf_counter()
 
-for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,chunk_size),chunks(windows_indices,chunk_size)),start=start_chunk_idx), total=len(windows)//chunk_size, desc="Chunks"):
+for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
+
+    # Skip already calculated batches
+    if args.resume:
+        if i <= checkpoint:
+            continue
 
     # Concurrent calculation 
     with ProcessPoolExecutor() as p:
-        results = list(tqdm(p.map(func,chunk), total=len(chunk),leave=False))
+        results = list(tqdm(p.map(func,chunk), total=len(chunk),leave=False,desc="Window"))
     
     # Transforming results
     models, vols = zip(*results)
@@ -190,6 +195,9 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,chunk_size),chunk
     df_vols.to_parquet(f"temp/volatility_forecasts_{i:03d}.parquet")
     #df_models.to_parquet(f"temp/volatility_models_{i:03d}.parquet")
 
+    # Save progress 
+    save_checkpoint(i)
+
     del results, models, vols, df_models, df_vols
 
 
@@ -200,7 +208,7 @@ logging.info(f"A total of {model.n.value} calculations and {model.nc.value} conv
 
 print(f"Calculation completed in {end-start:.2f} seconds!")
 print(f"A total of {model.n.value} calculations and {model.nc.value} convergence failures!")
-print(f"Run `build_volatility_dataframes.py` to aggregate temporary results.")
+print("Run `build_volatility_dataframes.py` to aggregate temporary results.")
 
 # -----------
 # ALTERNATIVE

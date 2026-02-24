@@ -15,7 +15,7 @@ import sys
 import itertools
 import logging
 import pickle as pkl
-from tools.Helpers import Parameters, StoreDict, chunks
+from tools.Helpers import Parameters, StoreDict, chunks, save_checkpoint, get_checkpoint
 
 
 defaults = dict(
@@ -53,10 +53,11 @@ parser.add_argument("--controls",nargs="+",required=False,default={}, action=Sto
 # Risk metric params
 parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
 
-# Computation params
-parser.add_argument("-cs","--chunk_size",type=int,required=False,default=64,help="Set the chunk-size for RAM-intense computations. Calculates chunks of chunk_size windows concurrently and writes the temporary results to disk, then continues with the next chunk_size windows. Default: 64.")
+# Calculation params
+parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
 parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0, start from the beginning, e.g. with the first window.")
 parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end, e.g until the last window is finished.")
+parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 # Save frequency
 parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save the vine copula object to disk every save_frequency windows. Default: -1, no saving.")
@@ -92,11 +93,12 @@ _params = {"portfolio":args.portfolio,
                 ]
             },
             "calculation": {
-                "chunk_size":args.chunk_size,
+                "batch_size":args.batch_size,
                 "from":args.start,
                 "to":args.stop,
                 "save_freq":args.save_freq,
-                "parallel": not args.sequential
+                "parallel": not args.sequential,
+                "resume": args.resume
             },
             "controls": VineCopula.get_controls(controls)
         }
@@ -106,7 +108,7 @@ params = Parameters(_params)
 print(f"Starting {SIM} {' & '.join(params.simulation.risk_metric)} with parameters:")
 print(params)
 
-logging.basicConfig(filename=f'./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logging.info("STARTING CALCULATION\n"
              + "-" * 50
@@ -136,7 +138,9 @@ windows_indices = windows_indices[args.start:args.stop]
 windows = windows[args.start:args.stop]
 
 # Start/Stop for distributed computing
-start_chunk_idx = args.start//args.chunk_size
+checkpoint = get_checkpoint()
+start_chunk_idx = args.start//args.batch_size + checkpoint + 1
+remaining_chunks = len(windows)//args.batch_size - checkpoint
 
 
 # Save current calculation params to temp to restore for building dataframes or resuming
@@ -164,7 +168,7 @@ def func(window):
     return VineCopula.VineCopulaResult(vine), var, es
 
 
-print(f"Calculating {SIM} VaR & ES...")
+print(f"Calculating {SIM} VaR & ES. Starting with batch {start_chunk_idx}...")
 start = time.perf_counter()
 
 # -----------------
@@ -173,12 +177,17 @@ start = time.perf_counter()
 
 concurrent = not args.sequential
 
-for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.chunk_size),chunks(windows_indices,args.chunk_size)),start=start_chunk_idx), total=len(windows)//args.chunk_size, desc="Chunks"):
+for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
+
+    # Skip already calculated batches
+    if args.resume:
+        if i <= checkpoint:
+            continue
 
     if concurrent:
     # Concurrent calculation 
         with ProcessPoolExecutor() as p:
-            results = list(tqdm(p.map(func,chunk), total=len(chunk), leave=False))
+            results = list(tqdm(p.map(func,chunk), total=len(chunk), leave=False, desc="Window"))
     else:
         results = []
     # Serial calculation
@@ -216,6 +225,9 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.chunk_size),
     if d:
         print("IF",d)
         pkl.dump(d, open(f"temp/models_{i:03d}.pkl","wb"))
+
+    # Save progress
+    save_checkpoint(i)
 
     del var_series, es_series, vines
 

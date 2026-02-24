@@ -1,6 +1,7 @@
 import json 
 import argparse
 import itertools
+import os
 
 
 def chunks(iterable, chunk_size):
@@ -13,6 +14,26 @@ def chunks(iterable, chunk_size):
         if not chunk:
             break
         yield chunk
+
+
+def save_checkpoint(idx):
+    """
+    Save the current progress when the calculation is interrupted. 
+    """
+    with open("temp/checkpoint","wt") as f:
+        f.write(str(idx))
+
+
+def get_checkpoint():
+    """
+    Read the current progress when resuming an interrupted calculation. 
+    Returns the index of the last successfully calculated batch.
+    """
+    if os.path.exists("temp/checkpoint"):
+        with open("temp/checkpoint","rt") as f:
+            check = f.read()
+        return int(check)
+    return 0
 
 
 class Parameters:
