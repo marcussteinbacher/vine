@@ -113,6 +113,6 @@ print(f"{path}/volatility_models_summary.json written!")
 os.system(f"mv temp/params.json {path}/params.json")
 print(f"{path}/params.json written!")
 
-# Clean temp folder
+# Clean checkpoints
 if not args.keep:
-    os.system("rm temp/*")
+    os.system("rm temp/checkpoint")

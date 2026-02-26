@@ -33,7 +33,7 @@ path.append(f"data/{params.portfolio}/{params.volatility.volatility_model}/{para
 if params.simulation.name == "MultivariateCopula": 
     path.append(f"/{params.simulation.copula}")
 path.append(f"/{params.simulation.margin_distribution}")
-path = "".join(path)
+path_s = "".join(path)
 
 # -------------
 # VaR DataFrame
@@ -45,7 +45,7 @@ def build_var_df(files):
     df.sort_index(inplace=True)
 
     # Saving
-    df.to_parquet(path+"/VaR.parquet")
+    df.to_parquet(path_s+"/VaR.parquet")
 
     print(f"{path}/VaR.parquet written!")
 
@@ -64,7 +64,7 @@ def build_es_df(files):
     df.sort_index(inplace=True)
 
     # Saving
-    df.to_parquet(path+"/ES.parquet")
+    df.to_parquet(path_s+"/ES.parquet")
 
     print(f"{path}/ES.parquet written!")
 
@@ -85,7 +85,7 @@ def build_models_dict(files):
             d.update(pkl.load(f))
     sorted_dict = dict(sorted(d.items()))
 
-    with open(path+"/models.pkl","wb") as f:
+    with open(path_s+"/models.pkl","wb") as f:
         pkl.dump(sorted_dict,f)
 
     print(f"{path}/models.pkl written!")
@@ -109,9 +109,9 @@ if __name__ == "__main__":
     os.system(f"mv temp/params.json {path}/params.json")
     print(f"{path}/params.json written!")
 
-    # Clean temp folder incl. checkpoints
+    # Clean checkpoints
     if not args.keep:
-        os.system("rm temp/*")
+        os.system("rm temp/checkpoint")
 
 # -------------
 # Copula params DataFrame

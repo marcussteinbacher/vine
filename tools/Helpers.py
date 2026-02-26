@@ -60,6 +60,19 @@ class Parameters:
         :type path: str
         """
         return cls(json.load(open(path,"rt")))
+    
+    def __dir__(self)->tuple[str]:
+        return tuple(self._all_keys(self.dict))
+
+    def _all_keys(self, d:dict):
+        """
+        Generator that extracts all keys from a nested dictionary.
+        """
+        for k in d.keys():
+            yield k
+        for k in d.values():
+            if isinstance(k, dict):
+                yield from self._all_keys(k)
 
 
 class StoreDict(argparse.Action):
@@ -77,8 +90,8 @@ class StoreDict(argparse.Action):
             except ValueError:
                 return value  # fallback to string
     
-    def __call__(self, parser, namespace, values, option_string=None):
-        d = getattr(namespace, self.dest) or {}
+    def __call__(self, parser, namespace, values:dict, option_string=None):
+        d = getattr(namespace, self.dest)
         for item in values:
             k, v = item.split('=', 1)
             d[k] = self.parse_value(v)
