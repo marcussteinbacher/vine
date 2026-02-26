@@ -29,20 +29,20 @@ esac
 
 DIR="./scripts"
 
-# Model Parameters 
+# ------ General Model Parameters ------ 
 PORTFOLIO=$1
 VM="Garch"
 ID="Empirical"
 CP="Student"
 MD="Empirical"
 
-# Build Simulation Folder Structure
+# ------ Build Simulation Folder Structure ------
 mkdir -p "data/$PORTFOLIO/$VM/$ID/HistoricalSimulation"
 mkdir -p "data/$PORTFOLIO/$VM/$ID/VarianceCovariance"
 mkdir -p "data/$PORTFOLIO/$VM/$ID/MultivariateCopula/$CP/$MD"
 mkdir -p "data/$PORTFOLIO/$VM/$ID/VineCopula/$MD"
 
-# Volatility Forecasts
+# ------ Volatility Forecasts ------
 cp "$DIR/run_volatility_forecasts.py" .
 cp "$DIR/build_volatility_data.py" .
 
@@ -52,15 +52,15 @@ python build_volatility_data.py
 rm run_volatility_forecasts.py
 rm build_volatility_data.py
 
-# Historical Simulation
+# ------ Historical Simulation ------
 cp "$DIR/run_historical_simulation.py" .
 
 python run_historical_simulation.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -r VaR
-python run_historical_simulation.py -p -p "$PORTFOLIO" -vm "$VM" -id "$ID" -r ES
+python run_historical_simulation.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -r ES
 
 rm run_historical_simulation.py
 
-# VarianceCovariance
+# ------ VarianceCovariance ------
 cp "$DIR/run_variance_covariance.py" .
 
 python run_variance_covariance.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -r VaR
@@ -68,20 +68,20 @@ python run_variance_covariance.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -r ES
 
 rm run_variance_covariance.py
 
-# MultivariateCopula
+# ------ MultivariateCopula ------
 cp "$DIR/run_multivariate_copula.py" .
 cp "$DIR/build_risk_data.py" .
 
 python run_multivariate_copula.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -cp "$CP" -md "$MD" -fm itau --controls df=3 --save_freq 250
 python build_risk_data.py
 
-rm run_variance_covariance.py
+rm run_multivariate_copula.py
 
-# VineCopula
+# ------ VineCopula ------
 cp "$DIR/run_vine_copula.py" .
 
-python run_vine_copula.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -md "$MD" -fm itau --controls df=3 --save_freq 250
+python run_vine_copula.py -p "$PORTFOLIO" -vm "$VM" -id "$ID" -md "$MD" -fm itau --save_freq 250
 python build_risk_data.py
 
-rm run_variance_covariance.py
+rm run_vine_copula.py
 rm build_risk_data.py

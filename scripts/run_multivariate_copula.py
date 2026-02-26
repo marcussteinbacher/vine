@@ -9,11 +9,13 @@ from models import AdjustedReturn, MultivariateCopula
 import time
 import json
 import config
+import os
 import sys
 import itertools
 import logging
 import pickle as pkl
 from tools.Helpers import Parameters, chunks, StoreDict, get_checkpoint, save_checkpoint
+from typing import cast
 
 
 SIM = "MultivariateCopula"
@@ -39,8 +41,9 @@ parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="
 
 # Calculation params
 parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
-parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0, start from the beginning, e.g. with the first window.")
-parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end, e.g until the last window is finished.")
+parser.add_argument("--max_workers",type=int,required=False,default=None,help="Set the maximum number of CPU cores to use. Default: None, use all cores as of os.cpu_count(). Only effective when running in parallel.")
+parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific batch for distributed computing. Default: 0, start from the beginning, e.g. with the first batch.")
+parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific batch for distributed computing. Default: None, calculate until the end, e.g until the last batch is finished.")
 parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 # Save frequency
@@ -49,6 +52,9 @@ parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save 
 args = parser.parse_args()
 
 args.simulation = SIM
+
+if not args.max_workers:
+    args.max_workers = os.cpu_count()
 
 # Collectin all arguments into params
 _params = {"portfolio":args.portfolio,
@@ -75,6 +81,7 @@ _params = {"portfolio":args.portfolio,
                 "to":args.stop,
                 "save_freq":args.save_freq,
                 "parallel":True,
+                "max_workers":args.max_workers,
                 "resume":args.resume
             },
             "controls":args.controls
@@ -109,18 +116,19 @@ print("Done!")
 del returns, volatilities
 
 
-# Restrict here to --from -> args.start, --to -> args.stop if calculation is distributed to different machines
-windows_indices = windows_indices[args.start:args.stop]
-windows = windows[args.start:args.stop]
-
-
+# Calculate start, end batch indices
 if args.resume:
     checkpoint = get_checkpoint()
-    start_chunk_idx = args.start//args.batch_size + checkpoint + 1
-    remaining_chunks = len(windows)//args.batch_size - checkpoint
+    start, stop = checkpoint + 1, args.stop
 else:
-    start_chunk_idx = args.start//args.batch_size
-    remaining_chunks = len(windows)//args.batch_size
+    start, stop = args.start, args.stop
+
+index_batches = list(chunks(windows_indices, args.batch_size))[start:stop]
+window_batches = list(chunks(windows, args.batch_size))[start:stop]
+
+remaining_batches = len(window_batches)
+
+del windows_indices, windows
 
 
 # Set copula and margin distribution
@@ -130,6 +138,7 @@ match args.copula:
     case "Student":
         # Little overhead high-speed implementation for 'itau'
         if args.fit_method == "itau":
+            print("High-speed alternative chosen!")
             copula_cls = MultivariateCopula.MultivariateStudent
         else:
             copula_cls = cp.StudentCopula # copulae
@@ -145,24 +154,18 @@ match args.copula:
         raise NotImplementedError(f"Copula {e} not implemented!")
     
 
-print(f"Calculating {SIM} {' & '.join(params.simulation.risk_metric)}, Starting with batch {start_chunk_idx}...")
-start = time.perf_counter()
+print(f"Calculating {SIM} {' & '.join(params.simulation.risk_metric)}. Starting with batch {start}...")
+start_time = time.perf_counter()
 
 # -----------------
 # START CALCULATION
 # -----------------
 
-for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
-
-    # Skip already calculated batches
-    if args.resume:
-        if i <= checkpoint:
-            continue
+for i, (batch, batch_idx) in tqdm(enumerate(zip(window_batches,index_batches),start=start), total=remaining_batches, desc="Batch"):
     
     # Concurrent calculation 
-    with ProcessPoolExecutor() as p:
-        results = list(tqdm(p.map(partial(MultivariateCopula.simulate,copula_cls=copula_cls,margin_dist=args.margin_distribution,n_samples=args.n,method=args.fit_method,alpha=args.alpha,**args.controls),chunk), total=len(chunk), leave=False, desc="Window"))
-    
+    with ProcessPoolExecutor(max_workers=args.max_workers) as p:
+        results = list(tqdm(p.map(partial(MultivariateCopula.simulate,copula_cls=copula_cls,margin_dist=args.margin_distribution,n_samples=args.n,method=args.fit_method,alpha=args.alpha,**args.controls),batch), total=len(batch), leave=False, desc="Window"))
     
     # Transforming results
     cop_res, var, es = zip(*results)
@@ -173,14 +176,14 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     ess = np.array(es, dtype=np.float32)
 
 
-    # Save copula in every n-th window
-    win_idx = list(map(lambda x: x + i*args.chunk_size, range(args.chunk_size)))
+    # Save copula in every n-th window. {WINDOW_INDEX: COPULA, ...}
+    win_idx = list(map(lambda x: x + i*args.batch_size, range(args.batch_size)))
     cops = filter(lambda t: t[0]%args.save_freq == 0, zip(win_idx,cop_res))
 
     del var, es, cop_res
 
     # Temporal alignment, set forecast one day into the future
-    future_index = [idx[-1] + pd.offsets.BusinessDay(1) for idx in chunk_idx]
+    future_index = [idx[-1] + pd.offsets.BusinessDay(1) for idx in batch_idx]
 
     var_series = pd.Series(vars, index=future_index)
     es_series = pd.Series(ess, index=future_index)
@@ -192,8 +195,10 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     var_series.to_frame(name="var").to_parquet(f"temp/var_{i:03d}.parquet")
     es_series.to_frame(name="es").to_parquet(f"temp/es_{i:03d}.parquet")
     # write if not empty
-    if dict(cops):
-        pkl.dump(dict(cops), open(f"temp/models_{i:03d}.pkl","wb"))
+    d = dict(cops)
+    if d:
+        print(d)
+        pkl.dump(d, open(f"temp/models_{i:03d}.pkl","wb"))
 
     # Save checkpoint
     save_checkpoint(i)
@@ -201,9 +206,9 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     del var_series, es_series, cops
 
 
-end = time.perf_counter()
+end_time = time.perf_counter()
 
-print(f"Calculation completed in {end-start:.2f} seconds!")
-print("Run `build_risk_dataframes.py` to aggregate temporary results.")
+print(f"Calculation completed in {end_time-start_time:.2f} seconds!")
+print("Run `build_risk_data.py` to aggregate temporary results.")
 
-logging.info(f"Calculation completed in {end-start:.2f} seconds!")
+logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")

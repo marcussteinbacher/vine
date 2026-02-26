@@ -211,6 +211,7 @@ class MultivariateStudentJIT:
         log_u = stats.t.logcdf(random_sample, self.df)
     
         return np.exp(log_u)
+
     
 class MultivariateStudent:
     """

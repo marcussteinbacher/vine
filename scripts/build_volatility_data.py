@@ -24,7 +24,7 @@ args.volatility_distribution = temp_args["volatility"]["innovation_distribution"
 
 path=f"data/{args.portfolio}/{args.volatility_model}/{args.volatility_distribution}"
 
-print(f"Building DataFrame for parameters:")
+print("Building DataFrame for parameters:")
 print(json.dumps(vars(args), indent=4))
 
 # --------------------
@@ -32,7 +32,7 @@ print(json.dumps(vars(args), indent=4))
 # --------------------
 
 # Reading all temporary files
-files = glob.glob(f"temp/volatility_forecasts_*.parquet")
+files = glob.glob("temp/volatility_forecasts_*.parquet")
 
 def file_gen(files):
     """
@@ -52,18 +52,13 @@ df.to_parquet(f"{path}/volatility_forecasts.parquet")
 
 print(f"{path}/volatility_forecasts.parquet written!")
 
-# Removing temporary files
-if not args.keep:
-    for file in files:
-        os.remove(file)
-
 del df
 
 # -----------------
 # VOLATILITY MODELS
 # -----------------
 
-files = sorted(glob.glob(f"temp/volatility_models_summary_*.pkl"))
+files = sorted(glob.glob("temp/volatility_models_summary_*.pkl"))
 
 #df_models = pd.concat(file_gen(files),ignore_index=True)
 
@@ -114,11 +109,10 @@ print(f"{path}/volatility_models_summary.json written!")
 
 #df_models.to_parquet(f"data/{PORTFOLIO}/{MODEL}/{DIST}/volatility_models.parquet")
 
-# Removing temporary files
-if not args.keep:
-    for file in files:
-        os.remove(file)
-
 # Move params.pkl
 os.system(f"mv temp/params.json {path}/params.json")
 print(f"{path}/params.json written!")
+
+# Clean temp folder
+if not args.keep:
+    os.system("rm temp/*")

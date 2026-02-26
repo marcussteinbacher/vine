@@ -11,6 +11,7 @@ import pyvinecopulib as pvc
 import time
 import json
 import config
+import os
 import sys
 import itertools
 import logging
@@ -55,8 +56,9 @@ parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="
 
 # Calculation params
 parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
-parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0, start from the beginning, e.g. with the first window.")
-parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end, e.g until the last window is finished.")
+parser.add_argument("--max_workers",type=int,required=False,default=None,help="Set the maximum number of CPU cores to use. Default: None, use all cores as of os.cpu_count(). Only effective when running in parallel.")
+parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific batch for distributed computing. Default: 0, start from the beginning, e.g. with the first batch.")
+parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific batch for distributed computing. Default: None, calculate until the end, e.g until the last batch is finished.")
 parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 # Save frequency
@@ -68,6 +70,9 @@ parser.add_argument("--sequential", action="store_true",help="Wether to use sequ
 args = parser.parse_args()
 
 args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+
+if not args.max_workers:
+    args.max_workers = os.cpu_count()
 
 # VineCopula controls
 defaults.update(args.controls)
@@ -98,6 +103,7 @@ _params = {"portfolio":args.portfolio,
                 "to":args.stop,
                 "save_freq":args.save_freq,
                 "parallel": not args.sequential,
+                "max_workers":args.max_workers,
                 "resume": args.resume
             },
             "controls": VineCopula.get_controls(controls)
@@ -133,18 +139,19 @@ print("Done!")
 del returns, volatilities
 
 
-# Restrict here to --from -> args.start, --to -> args.stop if calculation is distributed to different machines
-windows_indices = windows_indices[args.start:args.stop]
-windows = windows[args.start:args.stop]
-
-
+# Calculate start, end batch indices
 if args.resume:
     checkpoint = get_checkpoint()
-    start_chunk_idx = args.start//args.batch_size + checkpoint + 1
-    remaining_chunks = len(windows)//args.batch_size - checkpoint
+    start, stop = checkpoint + 1, args.stop
 else:
-    start_chunk_idx = args.start//args.batch_size
-    remaining_chunks = len(windows)//args.batch_size
+    start, stop = args.start, args.stop
+
+index_batches = list(chunks(windows_indices, args.batch_size))[start:stop]
+window_batches = list(chunks(windows, args.batch_size))[start:stop]
+
+remaining_batches = len(window_batches)
+
+del windows_indices, windows
 
 
 # Save current calculation params to temp to restore for building dataframes or resuming
@@ -172,8 +179,8 @@ def func(window):
     return VineCopula.VineCopulaResult(vine), var, es
 
 
-print(f"Calculating {SIM} VaR & ES. Starting with batch {start_chunk_idx}...")
-start = time.perf_counter()
+print(f"Calculating {SIM} VaR & ES. Starting with batch {start}...")
+start_time = time.perf_counter()
 
 # -----------------
 # START CALCULATION
@@ -181,21 +188,16 @@ start = time.perf_counter()
 
 concurrent = not args.sequential
 
-for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
-
-    # Skip already calculated batches
-    if args.resume:
-        if i <= checkpoint:
-            continue
+for i, (batch, batch_idx) in tqdm(enumerate(zip(window_batches,index_batches),start=start), total=remaining_batches, desc="Batch"):
 
     if concurrent:
     # Concurrent calculation 
-        with ProcessPoolExecutor() as p:
-            results = list(tqdm(p.map(func,chunk), total=len(chunk), leave=False, desc="Window"))
+        with ProcessPoolExecutor(max_workers=args.max_workers) as p:
+            results = list(tqdm(p.map(func,batch), total=len(batch), leave=False, desc="Window"))
     else:
+        # Serial calculation
         results = []
-    # Serial calculation
-        for window in tqdm(chunk):
+        for window in tqdm(batch):
             results.append(func(window))
     
 
@@ -208,13 +210,13 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     ess = np.array(es, dtype=np.float32)
 
     # Save vine in every n-th window
-    win_idx = list(map(lambda x: x + i*args.chunk_size, range(args.chunk_size)))
+    win_idx = list(map(lambda x: x + i*args.batch_size, range(args.batch_size)))
     vines = filter(lambda t: t[0]%args.save_freq == 0, zip(win_idx,vine_res))
 
     del var, es, vine_res
 
     # Temporal alignment, set forecast one day into the future
-    future_index = [idx[-1] + pd.offsets.BusinessDay(1) for idx in chunk_idx]
+    future_index = [idx[-1] + pd.offsets.BusinessDay(1) for idx in batch_idx]
 
     var_series = pd.Series(vars, index=future_index)
     es_series = pd.Series(ess, index=future_index)
@@ -227,7 +229,6 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
 
     d = dict(vines)
     if d:
-        print("IF",d)
         pkl.dump(d, open(f"temp/models_{i:03d}.pkl","wb"))
 
     # Save progress
@@ -236,7 +237,9 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     del var_series, es_series, vines
 
 
-end = time.perf_counter()
+end_time = time.perf_counter()
 
-print(f"Calculation completed in {end-start:.2f} seconds!")
-logging.info(f"Calculation completed in {end-start:.2f} seconds!")
+print(f"Calculation completed in {end_time-start_time:.2f} seconds!")
+print("Run `build_risk_data.py` to aggregate temporary results.")
+
+logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")

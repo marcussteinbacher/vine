@@ -15,6 +15,7 @@ import config
 from tools.Helpers import chunks, StoreDict
 import pickle as pkl
 import sys
+import os
 from tools.Helpers import save_checkpoint, get_checkpoint
 
 
@@ -33,15 +34,19 @@ parser.add_argument("--tol",type=int,required=False,default=1e-6,help="Adjust th
 parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict, help="Adjust further solver options. Valid entries include 'rescale','ftol', 'eps', 'disp', and 'maxiter'. Example: --controls maxiter=1000 (default). For possible options check scipy SLSQP.")
 
 # Concurrent calculation
-parser.add_argument("--sequential", action="store_true",help="Wether to use sequential computation. Default: False, uses concurrent computation.")
+#parser.add_argument("--sequential", action="store_true",help="Wether to use sequential computation. Default: False, uses concurrent computation.")
 
 # Calculation params
 parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
-parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0, start from the beginning, e.g. with the first window.")
-parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end, e.g until the last window is finished.")
+parser.add_argument("--max_workers",type=int,required=False,default=None,help="Set the maximum number of CPU cores to use. Default: None, use all cores as of os.cpu_count(). Only effective when running in parallel.")
+parser.add_argument("--from",type=int,dest='start',required=False,default=0,help="Start the calculation from a specific batch for distributed computing. Default: 0, start from the beginning, e.g. with the first batch.")
+parser.add_argument("--to",type=int,dest="stop",required=False,default=None,help="Stop the calculation at a specific batch for distributed computing. Default: None, calculate until the end, e.g until the last batch is finished.")
 parser.add_argument("--resume",action="store_true",required=False,help="Wether to resume the calculation from the last checkpoint, i.e. the last completed batch. Default: False.")
 
 args = parser.parse_args()
+
+if not args.max_workers:
+    args.max_workers = os.cpu_count()
 
 controls = dict(
     show_warning = True, # Always show convergence warnings
@@ -63,7 +68,8 @@ _params = {
                 "batch_size":args.batch_size,
                 "from":args.start,
                 "to":args.stop,
-                "parallel": not args.sequential,
+                "parallel": True, #not args.sequential,
+                "max_workers":args.max_workers,
                 "resume": args.resume,
             },
             "controls": controls 
@@ -96,17 +102,19 @@ print("Return data loaded!")
 # Split data into windows
 windows_indices, windows = DefaultSlicer.sliding_window_view(data, size=250)
 
-# Restrict here to --from -> args.start, --to -> args.stop if calculation is distributed to different machines
-windows_indices = windows_indices[args.start:args.stop]
-windows = windows[args.start:args.stop]
-
+# Calculate start, end batch indices
 if args.resume:
     checkpoint = get_checkpoint()
-    start_chunk_idx = args.start//args.batch_size + checkpoint + 1
-    remaining_chunks = len(windows)//args.batch_size - checkpoint
+    start, stop = checkpoint + 1, args.stop
 else:
-    start_chunk_idx = args.start//args.batch_size
-    remaining_chunks = len(windows)//args.batch_size
+    start, stop = args.start, args.stop
+
+index_batches = list(chunks(windows_indices, args.batch_size))[start:stop]
+window_batches = list(chunks(windows, args.batch_size))[start:stop]
+
+remaining_batches = len(window_batches)
+
+del windows_indices, windows
 
 # Initialize the model
 match (args.volatility_model, args.innovation_distribution):
@@ -155,21 +163,16 @@ def func(window):
     # Apply the volatility forecast column-wise to each window
     return np.apply_along_axis(model.volatility_forecast, axis=0, arr=window)
 
-print(f"Caclulating volatility forecasts. Starting with batch {start_chunk_idx}...")
+print(f"Caclulating volatility forecasts. Starting with batch {start}...")
 
 # Calculate the volatility forecast for each chunk of windows and each window in the chunk concurrently
-start = time.perf_counter()
+start_time = time.perf_counter()
 
-for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),chunks(windows_indices,args.batch_size)),start=start_chunk_idx), total=remaining_chunks, desc="Batch"):
-
-    # Skip already calculated batches
-    if args.resume:
-        if i <= checkpoint:
-            continue
-
+for i, (batch, batch_idx) in tqdm(enumerate(zip(window_batches,index_batches),start=start), total=remaining_batches, desc="Batch"):
+  
     # Concurrent calculation 
-    with ProcessPoolExecutor() as p:
-        results = list(tqdm(p.map(func,chunk), total=len(chunk),leave=False,desc="Window"))
+    with ProcessPoolExecutor(max_workers=args.max_workers) as p:
+        results = list(tqdm(p.map(func,batch), total=len(batch),leave=False,desc="Window"))
     
     # Transforming results
     models, vols = zip(*results)
@@ -177,7 +180,7 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     vols = np.array(vols, dtype=np.float32)
     
     # Temporal alignment, set forecast one day into the future
-    future_dates = [idx[-1] + pd.offsets.BusinessDay(1) for idx in chunk_idx]
+    future_dates = [idx[-1] + pd.offsets.BusinessDay(1) for idx in batch_idx]
 
     df_vols = pd.DataFrame(vols, index=future_dates, columns=data.columns)
 
@@ -205,14 +208,14 @@ for i, (chunk, chunk_idx) in tqdm(enumerate(zip(chunks(windows,args.batch_size),
     del results, models, vols, df_models, df_vols
 
 
-end = time.perf_counter()
+end_time = time.perf_counter()
 
-logging.info(f"Calculation completed in {end-start:.2f} seconds!")
+logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")
 logging.info(f"A total of {model.n.value} calculations and {model.nc.value} convergence failures!")
 
-print(f"Calculation completed in {end-start:.2f} seconds!")
+print(f"Calculation completed in {end_time-start_time:.2f} seconds!")
 print(f"A total of {model.n.value} calculations and {model.nc.value} convergence failures!")
-print("Run `build_volatility_dataframes.py` to aggregate temporary results.")
+print("Run `build_volatility_data.py` to aggregate temporary results.")
 
 # -----------
 # ALTERNATIVE

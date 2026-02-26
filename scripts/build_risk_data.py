@@ -14,7 +14,7 @@ args = parser.parse_args()
 # Read temp params json
 params = Parameters.from_json("temp/params.json")
 
-print(f"Populating temporary files for parameters:")
+print("Populating temporary files for parameters:")
 print(json.dumps(params.dict, indent=4))
 
 
@@ -96,10 +96,10 @@ def build_models_dict(files):
 
 
 if __name__ == "__main__":
-    files = glob.glob(f"temp/var_*.parquet")
+    files = glob.glob("temp/var_*.parquet")
     build_var_df(files)
 
-    files = glob.glob(f"temp/es_*.parquet")
+    files = glob.glob("temp/es_*.parquet")
     build_es_df(files)
 
     files = glob.glob("temp/models_*.pkl")
@@ -108,6 +108,10 @@ if __name__ == "__main__":
     # Move model params.pkl
     os.system(f"mv temp/params.json {path}/params.json")
     print(f"{path}/params.json written!")
+
+    # Clean temp folder incl. checkpoints
+    if not args.keep:
+        os.system("rm temp/*")
 
 # -------------
 # Copula params DataFrame

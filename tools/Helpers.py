@@ -16,7 +16,7 @@ def chunks(iterable, chunk_size):
         yield chunk
 
 
-def save_checkpoint(idx):
+def save_checkpoint(idx)->None:
     """
     Save the current progress when the calculation is interrupted. 
     """
@@ -24,7 +24,7 @@ def save_checkpoint(idx):
         f.write(str(idx))
 
 
-def get_checkpoint():
+def get_checkpoint()->int:
     """
     Read the current progress when resuming an interrupted calculation. 
     Returns the index of the last successfully calculated batch.
@@ -40,6 +40,7 @@ class Parameters:
     """
     A helper class to represent a nested dictionary to access all attributes in chained dot-notation.
     """
+    
     def __init__(self,d:dict):
         self.dict = d
         for k,v in d.items():
