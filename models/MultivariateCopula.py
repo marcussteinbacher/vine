@@ -17,7 +17,7 @@ from scipy.linalg import cholesky
 
 def log_random(self, n:Numeric, seed:int|None=None):
     """
-    Overwrite the original random method with one that uses logcdf.
+    Overwrite the original random method for t-copulas in the 'copulae'-package with one that uses logcdf.
     """
     r = mvt.rvs(cov=self.sigma, df=self._df, size=n, random_state=seed)
     log_u = t.logcdf(r, self._df)
@@ -85,7 +85,7 @@ class MultiVariateCopulaResult:
     def to_frame(self):
         ...
 
-
+# This part in /simulations for new Runner class
 INIT_KWARGS = ["df"]
 FIT_KWARGS = ["method","to_pobs","fix_df"] # fix_df not needed for itau, irho
 RND_KWARGS = ["n","seed"]

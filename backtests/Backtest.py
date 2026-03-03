@@ -154,7 +154,7 @@ def simple_hits(actual:Union[pd.Series,NDArray],var:Union[pd.Series, NDArray])->
     """
     Returns a boolean Series of hits where the actual returns exceed the VaR.
     """
-    if isinstance(actual, pd.Series):
+    if isinstance(actual, pd.Series) and isinstance(var, pd.Series):
         index = actual.dropna().index.intersection(var.dropna().index)
         violations = actual.loc[index]<var.loc[index]
     else:

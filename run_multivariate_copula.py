@@ -197,7 +197,7 @@ for i, (batch, batch_idx) in tqdm(enumerate(zip(window_batches,index_batches),st
     # write if not empty
     d = dict(cops)
     if d:
-        #print(d)
+        print(d)
         pkl.dump(d, open(f"temp/models_{i:03d}.pkl","wb"))
 
     # Save checkpoint

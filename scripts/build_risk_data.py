@@ -47,12 +47,7 @@ def build_var_df(files):
     # Saving
     df.to_parquet(path_s+"/VaR.parquet")
 
-    print(f"{path}/VaR.parquet written!")
-
-    # Removing temporary files
-    if not args.keep:
-        for file in files:
-            os.remove(file)
+    print(f"{path_s}/VaR.parquet written!")
 
 # -------------
 # ES DataFrame
@@ -66,12 +61,8 @@ def build_es_df(files):
     # Saving
     df.to_parquet(path_s+"/ES.parquet")
 
-    print(f"{path}/ES.parquet written!")
+    print(f"{path_s}/ES.parquet written!")
 
-    # Removing temporary files
-    if not args.keep:
-        for file in files:
-            os.remove(file)
 
 # -------------
 # Aggregate risk_models.pkl
@@ -88,11 +79,7 @@ def build_models_dict(files):
     with open(path_s+"/models.pkl","wb") as f:
         pkl.dump(sorted_dict,f)
 
-    print(f"{path}/models.pkl written!")
-
-    if not args.keep:
-        for file in files:
-            os.remove(file)
+    print(f"{path_s}/models.pkl written!")
 
 
 if __name__ == "__main__":
@@ -106,12 +93,12 @@ if __name__ == "__main__":
     build_models_dict(files)
 
     # Move model params.pkl
-    os.system(f"mv temp/params.json {path}/params.json")
-    print(f"{path}/params.json written!")
+    os.system(f"mv temp/params.json {path_s}/params.json")
+    print(f"{path_s}/params.json written!")
 
     # Clean checkpoints
     if not args.keep:
-        os.system("rm temp/checkpoint")
+        os.system("rm temp/*")
 
 # -------------
 # Copula params DataFrame

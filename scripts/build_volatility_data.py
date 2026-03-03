@@ -115,4 +115,4 @@ print(f"{path}/params.json written!")
 
 # Clean checkpoints
 if not args.keep:
-    os.system("rm temp/checkpoint")
+    os.system("rm temp/*")
