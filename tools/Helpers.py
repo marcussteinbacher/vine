@@ -65,7 +65,7 @@ def _get_path(params:Parameters)->str:
         case "MultivariateCopula":
             path = base + f"{params.simulation.copula}/{params.simulation.margin_distribution}/"
         case "VineCopula":
-            path = base + f"{params.margin_distribution}/"
+            path = base + f"{params.simulation.margin_distribution}/"
         case _:
             path = base
 
