@@ -1,3 +1,5 @@
+import os
+import multiprocessing as mp
 import argparse
 import pandas as pd
 from models import AdjustedReturn, VineCopula
@@ -6,22 +8,13 @@ import pyvinecopulib as pvc
 import time
 import json
 import config
-import os
 import logging
 from tools.Helpers import Parameters, StoreDict, save_scalars, save_objects, save_params
 from functools import partial
 from tools.Runner import Runner
 
-
-# ------- Setting environment variables ----------
-# suppress BLAS threading — Cholesky and matmul are the bottleneck,
-# but with n_workers=cpu_count() you want 1 thread per worker
-os.environ["OMP_NUM_THREADS"]      = "1"
-os.environ["MKL_NUM_THREADS"]      = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["NUMBA_NUM_THREADS"] = "1"
-# -------------------------------------------------
-
+# Force spawn
+mp.set_start_method("spawn", force=True)
 
 _SIM = "VineCopula"
 logging.basicConfig(filename='./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

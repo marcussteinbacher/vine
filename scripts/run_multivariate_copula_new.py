@@ -16,10 +16,10 @@ import multiprocessing as mp
 # ------- Setting environment variables ----------
 # suppress BLAS threading — Cholesky and matmul are the bottleneck,
 # but with n_workers=cpu_count() you want 1 thread per worker
-os.environ["OMP_NUM_THREADS"]      = "1"
-os.environ["MKL_NUM_THREADS"]      = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["NUMBA_NUM_THREADS"] = "1"
+#os.environ["OMP_NUM_THREADS"]      = "1"
+#os.environ["MKL_NUM_THREADS"]      = "1"
+#os.environ["OPENBLAS_NUM_THREADS"] = "1"
+#os.environ["NUMBA_NUM_THREADS"] = "1"
 # -------------------------------------------------
 
 # Force spawn
