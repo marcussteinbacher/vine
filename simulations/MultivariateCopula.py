@@ -79,9 +79,7 @@ def simulate_mvc(
             cop_obj.fit(pobs, **fit_kwargs)
 
         sample = cop_obj.random(n_samples,**rnd_kwargs)
-
         anti_sample = antithetic_variates(np.array(sample))
-        
         rescaled_sample, margin_params = ppf_transform(anti_sample, window, margin_dist, **margin_kwargs)
         
         var = value_at_risk(rescaled_sample, **risk_kwargs)

@@ -61,9 +61,9 @@ def chunks(iterable, chunk_size):
 
 def _get_path(params:Parameters)->str:
     base = f"data/{params.portfolio}/{params.volatility.volatility_model}/{params.volatility.innovation_distribution}/{params.simulation.name}/"
-    match params.simultion.name:
+    match params.simulation.name:
         case "MultivariateCopula":
-            path = base + f"{params.simulation.copula}/{params.simultion.margin_distribution}/"
+            path = base + f"{params.simulation.copula}/{params.simulation.margin_distribution}/"
         case "VineCopula":
             path = base + f"{params.margin_distribution}/"
         case _:
@@ -86,7 +86,7 @@ def save_scalars(data:dict, index:pd.Index|None=None,temp_dir:str="temp") -> Non
     
     # Concat to dataframe
     df = pd.DataFrame.from_dict(data,orient="index",columns=["var","es"],dtype=np.float32)
-    if index:
+    if index is not None:
         df.index = index
     
     # Saving 
@@ -117,7 +117,7 @@ def save_params(temp_dir:str="temp"):
     """
     params = Parameters.from_json(f"{temp_dir}/params.json")
     path = _get_path(params)
-    subprocess.call([f"mv {temp_dir}/params.json {path+"params.json"}"])
+    subprocess.run(["mv", f"{temp_dir}/params.json", path+"params.json"])
 
 
 def save_checkpoint(idx)->None:

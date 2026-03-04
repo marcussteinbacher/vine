@@ -59,13 +59,13 @@ def main():
     path_s = f"data/{params.portfolio}/{params.volatility.volatility_model}/{params.volatility.innovation_distribution}/{params.simulation.name}/"
 
 
-    print(f"Starting {_SIM} {args.risk_metric} with parameters:")
+    print(f"Starting {_SIM} VaR & ES with parameters:")
     print(json.dumps(_params, indent=4)) # Only show params for this run, not the merged params
 
 
     logging.info("STARTING CALCULATION\n"
              + "-" * 50
-             + f"\n{args.simulation} with parameters:"
+             + f"\n{_SIM} with parameters:"
              + "\n" + str(params)
              + "\n" + "-" * 50)
 
@@ -79,11 +79,11 @@ def main():
     print("Done!")
 
     # Creating the index for the one-day ahead VaR/ES forecasts
-    index = returns.index + pd.offsets.BusinessDay(1)
+    fut_index = returns.index + pd.offsets.BusinessDay(1)
 
     del returns, volatilities
 
-    print(f"Calculating {args.simulation} VaR & ES...")
+    print(f"Calculating {_SIM} VaR & ES...")
     start = time.perf_counter()
 
     # -----------------
@@ -106,6 +106,7 @@ def main():
     #vars = np.array(var, dtype=np.float32)
     #ess = np.array(es, dtype=np.float32)
 
+    index = fut_index[-len(var):]
     vars = pd.Series(data=var,index=index,dtype=np.float32)
     ess = pd.Series(data=es,index=index,dtype=np.float32)
 
@@ -118,10 +119,10 @@ def main():
     ess.to_frame(name="es").to_parquet(path_s+"ES.parquet")
     print(path_s+"ES.parquet written!")
 
-    with open(path_s+"/params.json","wt") as f:
+    with open(path_s+"params.json","wt") as f:
         json.dump(params.dict,f,indent=4)
     
-    print(path_s+"/params.json written!")
+    print(path_s+"params.json written!")
 
 
 if __name__ == "__main__":

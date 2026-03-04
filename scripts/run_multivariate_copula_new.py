@@ -1,19 +1,29 @@
+import os 
 import argparse
 import pandas as pd
-import numpy as np
 import copulae as cp
 from functools import partial
 from models import AdjustedReturn, MultivariateCopula
 import time
 import json
 import config
-import os
 import logging
 from tools.Helpers import Parameters, StoreDict, save_scalars, save_objects, save_params
 from tools.Runner import Runner
-from pathlib import Path
 from simulations.MultivariateCopula import simulate_mvc
+import multiprocessing as mp
 
+# ------- Setting environment variables ----------
+# suppress BLAS threading — Cholesky and matmul are the bottleneck,
+# but with n_workers=cpu_count() you want 1 thread per worker
+os.environ["OMP_NUM_THREADS"]      = "1"
+os.environ["MKL_NUM_THREADS"]      = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["NUMBA_NUM_THREADS"] = "1"
+# -------------------------------------------------
+
+# Force spawn
+mp.set_start_method("spawn", force=True)
 
 _SIM = "MultivariateCopula"
 logging.basicConfig(filename='./log/risk_forecasts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -40,13 +50,13 @@ def parse_args():
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
 
     # Calculation params
-    parser.add_argument("-bs","--batch_size",type=int,required=False,default=64,help="Set the batch-size for RAM-intense computations or interrupted cloud computing. Calculates batch-size windows concurrently and writes the temporary results to disk, then continues with the next batch of windows. Default: 64.")
     parser.add_argument("--max_workers",type=int,required=False,default=os.cpu_count(),help="Set the maximum number of CPU cores to use. Default: None, use all cores as of os.cpu_count(). Only effective when running in parallel.")
     parser.add_argument("--from",type=int,dest='start_idx',required=False,default=0,help="Start the calculation from a specific window index for distributed computing. Default: 0.")
     parser.add_argument("--to",type=int,dest="stop_idx",required=False,default=None,help="Stop the calculation at a specific window index for distributed computing. Default: None, calculate until the end.")
 
     # Save frequency
     parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save the object (e.g. fitted copula object) to disk every save_frequency windows. Default: -1, no saving.")
+    parser.add_argument("--keep",action="store_true",required=False,help="Wether to keep the temporary files. Default: False.")
 
     return parser.parse_args()
 
@@ -74,12 +84,12 @@ def main():
                     ]
                 },
                 "calculation": {
-                    "batch_size":args.batch_size,
-                    "from":args.start,
-                    "to":args.stop,
+                    "from":args.start_idx,
+                    "to":args.stop_idx,
                     "save_freq":args.save_freq,
                     "parallel":True,
                     "max_workers":args.max_workers,
+                    "keep":args.keep
                 },
                 "controls":args.controls
             }
@@ -110,7 +120,7 @@ def main():
 
     # Limit windows to --from, --to for distributed computing
     windows = windows[args.start_idx:args.stop_idx]
-    index = returns.index[args.start_idx:args.stop_idx]
+    fut_index = (returns.index + pd.offsets.BusinessDay(1))[args.start_idx:args.stop_idx] 
 
     del returns, volatilities
 
@@ -123,6 +133,10 @@ def main():
             if args.fit_method == "itau":
                 print("High-speed alternative chosen!")
                 copula_cls = MultivariateCopula.MultivariateStudent
+            elif args.fit_method == "irho":
+                # Not recommended using irho
+                print("High-speed alternative chosen!")
+                copula_cls = MultivariateCopula.MultivariateStudent 
             else:
                 copula_cls = cp.StudentCopula # copulae
         case "Empirical":
@@ -147,14 +161,15 @@ def main():
                     **args.controls
                     )
 
-    #temp_dir = Path(args.temp_dir) if args.temp_dir else (Path(tempfile.gettempdir()) / "run1_gaussian_copula")
-
+    # Instantiate the runner
     runner = Runner(
         calculation_fn=calc_fn,
         data=windows,
-        chunk_size=args.batch_size,
-        object_stride=args.save_freq,
         n_workers=args.max_workers,
+        max_in_flight=args.max_workers * 8,
+        flush_threshold=16, # flush scalars every 16 completed windows
+        object_stride=args.save_freq,
+        object_flush_threshold=4, # flush objects when 4 are enqueued
         temp_dir="temp"
     )
 
@@ -171,14 +186,15 @@ def main():
     # Collecting results
     scalars = runner.collect_scalars()
     cops = runner.collect_objects()
-    runner.cleanup()
+
+    if not args.keep:
+        runner.cleanup()
 
     # Save aggregated data: VaR.parquet, ES.parquet, models.pkl, params.json
-    future_index =  index + pd.offsets.BusinessDay(1)
-    save_scalars(scalars,future_index)
+    index = fut_index[-len(scalars):]
+    save_scalars(scalars,index)
     save_objects(cops)
     save_params()
-
     
 if __name__ == "__main__":
     main()
