@@ -4,8 +4,8 @@
 Force compilation of numba funcitons here. Once cached, every run uses the same.
 """
 import numpy as np
-from ..tools.Kendall import kendall_tau_matrix_nb
-from ..tools.Transformations import empirical_ppf
+from tools.Kendall import kendall_tau_matrix_nb
+from tools.Transformations import empirical_ppf
 
 def _warmup_numba():
     """
