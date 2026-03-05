@@ -1,6 +1,7 @@
 *.ipynb
 *.log
 *.Identifier
+*.sh
 **/.ipynb_checkpoints/
 test.py
 
