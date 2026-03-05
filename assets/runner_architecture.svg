@@ -1,0 +1,471 @@
+<svg viewBox="0 0 1100 1320" xmlns="http://www.w3.org/2000/svg"
+     font-family="'Georgia','Times New Roman',serif">
+<defs>
+  <!-- Solarized Light:
+       base03=#002b36 base02=#073642 base01=#586e75 base00=#657b83
+       base0=#839496  base1=#93a1a1  base2=#eee8d5  base3=#fdf6e3
+       yellow=#b58900 orange=#cb4b16 red=#dc322f magenta=#d33682
+       violet=#6c71c4 blue=#268bd2  cyan=#2aa198  green=#859900 -->
+  <marker id="ab" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#268bd2"/></marker>
+  <marker id="av" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#6c71c4"/></marker>
+  <marker id="ag" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#859900"/></marker>
+  <marker id="ac" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2aa198"/></marker>
+  <marker id="ao" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#cb4b16"/></marker>
+  <marker id="ay" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#b58900"/></marker>
+  <marker id="as" markerWidth="7" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#586e75"/></marker>
+  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+    <path d="M20 0L0 0 0 20" fill="none" stroke="#93a1a1" stroke-width="0.3" opacity="0.4"/>
+  </pattern>
+  <!-- chip CPU symbol reusable -->
+  <symbol id="chip" viewBox="0 0 40 40">
+    <!-- body -->
+    <rect x="8" y="8" width="24" height="24" rx="2" fill="none" stroke="#586e75" stroke-width="1.5"/>
+    <rect x="11" y="11" width="18" height="18" rx="1" fill="none" stroke="#586e75" stroke-width="1"/>
+    <!-- inner grid lines -->
+    <line x1="11" y1="17" x2="29" y2="17" stroke="#586e75" stroke-width="0.6"/>
+    <line x1="11" y1="23" x2="29" y2="23" stroke="#586e75" stroke-width="0.6"/>
+    <line x1="17" y1="11" x2="17" y2="29" stroke="#586e75" stroke-width="0.6"/>
+    <line x1="23" y1="11" x2="23" y2="29" stroke="#586e75" stroke-width="0.6"/>
+    <!-- pins top -->
+    <line x1="14" y1="4" x2="14" y2="8" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="20" y1="4" x2="20" y2="8" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="26" y1="4" x2="26" y2="8" stroke="#586e75" stroke-width="1.2"/>
+    <!-- pins bottom -->
+    <line x1="14" y1="32" x2="14" y2="36" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="20" y1="32" x2="20" y2="36" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="26" y1="32" x2="26" y2="36" stroke="#586e75" stroke-width="1.2"/>
+    <!-- pins left -->
+    <line x1="4" y1="14" x2="8" y2="14" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="4" y1="20" x2="8" y2="20" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="4" y1="26" x2="8" y2="26" stroke="#586e75" stroke-width="1.2"/>
+    <!-- pins right -->
+    <line x1="32" y1="14" x2="36" y2="14" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="32" y1="20" x2="36" y2="20" stroke="#586e75" stroke-width="1.2"/>
+    <line x1="32" y1="26" x2="36" y2="26" stroke="#586e75" stroke-width="1.2"/>
+  </symbol>
+</defs>
+
+<!-- background grid -->
+<rect width="1100" height="1320" fill="url(#grid)" opacity="0.6"/>
+<!-- outer border -->
+<rect x="10" y="10" width="1080" height="1300" rx="4" fill="none" stroke="#93a1a1" stroke-width="0.8"/>
+
+<!-- ═══════════════════════════════════════════════════
+     TITLE
+═══════════════════════════════════════════════════ -->
+<text x="550" y="38" text-anchor="middle" fill="#073642" font-size="15" font-weight="bold" letter-spacing="0.5">Runner — Concurrent VaR Simulation Architecture</text>
+<text x="550" y="55" text-anchor="middle" fill="#586e75" font-size="9.5" font-style="italic">run_simulation.py  ·  input (6000 × 250 × 50)  ·  one future per window  ·  Student-t copula  df=3  ·  itau / Kendall τ</text>
+<line x1="28" y1="62" x2="1072" y2="62" stroke="#93a1a1" stroke-width="0.8"/>
+
+<!-- ═══════════════════════════════════════════════════
+     SECTION A — MAIN PROCESS
+═══════════════════════════════════════════════════ -->
+<text x="28" y="79" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="2" font-family="'Courier New',monospace">A · MAIN PROCESS  —  run_simulation.py</text>
+<line x1="28" y1="83" x2="1072" y2="83" stroke="#eee8d5" stroke-width="1"/>
+
+<!-- data.npy box -->
+<rect x="28" y="90" width="148" height="72" rx="3" fill="none" stroke="#268bd2" stroke-width="1.2"/>
+<text x="102" y="108" text-anchor="middle" fill="#586e75" font-size="7.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">INPUT FILE</text>
+<text x="102" y="123" text-anchor="middle" fill="#073642" font-size="11">data.npy</text>
+<text x="102" y="137" text-anchor="middle" fill="#839496" font-size="8">6000 × 250 × 50  float32</text>
+<text x="102" y="153" text-anchor="middle" fill="#839496" font-size="7.5" font-style="italic">mmap · read-only</text>
+
+<!-- Runner box -->
+<rect x="200" y="90" width="185" height="72" rx="3" fill="none" stroke="#268bd2" stroke-width="1.2"/>
+<text x="292" y="108" text-anchor="middle" fill="#586e75" font-size="7.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">RUNNER</text>
+<text x="292" y="123" text-anchor="middle" fill="#073642" font-size="10">6000 windows total</text>
+<text x="292" y="137" text-anchor="middle" fill="#839496" font-size="8">one future per window</text>
+<text x="292" y="153" text-anchor="middle" fill="#839496" font-size="7.5" font-style="italic">_find_completed_windows() on start</text>
+
+<!-- arrow data→runner -->
+<line x1="176" y1="126" x2="198" y2="126" stroke="#268bd2" stroke-width="1.2" marker-end="url(#ab)"/>
+
+<!-- Futures window box -->
+<rect x="410" y="90" width="220" height="72" rx="3" fill="none" stroke="#6c71c4" stroke-width="1.2"/>
+<text x="520" y="107" text-anchor="middle" fill="#586e75" font-size="7.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">FUTURES SLIDING WINDOW</text>
+<text x="520" y="122" text-anchor="middle" fill="#073642" font-size="10">max_in_flight = n_workers × 8</text>
+<text x="520" y="136" text-anchor="middle" fill="#839496" font-size="8">backpressure · refilled as futures complete</text>
+<text x="520" y="150" text-anchor="middle" fill="#6c71c4" font-size="7.5" font-style="italic">keeps all workers saturated · bounds memory</text>
+
+<!-- arrow runner→futures -->
+<line x1="385" y1="126" x2="408" y2="126" stroke="#6c71c4" stroke-width="1.2" marker-end="url(#av)"/>
+<!-- flow label -->
+<text x="396" y="122" text-anchor="middle" fill="#6c71c4" font-size="7" font-style="italic">submit</text>
+
+<!-- _worker_init box -->
+<rect x="658" y="90" width="200" height="72" rx="3" fill="none" stroke="#2aa198" stroke-width="1.2" stroke-dasharray="5,3"/>
+<text x="758" y="107" text-anchor="middle" fill="#586e75" font-size="7.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">_worker_init  (once / process)</text>
+<text x="758" y="122" text-anchor="middle" fill="#073642" font-size="9.5">calc_fn → _calc_fn_global</text>
+<text x="758" y="136" text-anchor="middle" fill="#839496" font-size="8">pickled once at pool startup</text>
+<text x="758" y="150" text-anchor="middle" fill="#2aa198" font-size="7.5" font-style="italic">not per task — avoids repeated pickling</text>
+
+<!-- ScalarWriter + ObjectWriter mini boxes -->
+<rect x="878" y="90" width="100" height="32" rx="3" fill="none" stroke="#2aa198" stroke-width="1"/>
+<text x="928" y="104" text-anchor="middle" fill="#2aa198" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">ScalarWriter</text>
+<text x="928" y="116" text-anchor="middle" fill="#839496" font-size="7">daemon thread</text>
+<rect x="878" y="130" width="100" height="32" rx="3" fill="none" stroke="#cb4b16" stroke-width="1"/>
+<text x="928" y="144" text-anchor="middle" fill="#cb4b16" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">ObjectWriter</text>
+<text x="928" y="156" text-anchor="middle" fill="#839496" font-size="7">daemon thread</text>
+
+<!-- ═══════════════════════════════════════════════════
+     SECTION B — PROCESS POOL
+═══════════════════════════════════════════════════ -->
+<text x="28" y="183" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="2" font-family="'Courier New',monospace">B · PROCESS POOL  —  n_workers subprocesses  (spawn)</text>
+<line x1="28" y1="187" x2="1072" y2="187" stroke="#eee8d5" stroke-width="1"/>
+<text x="550" y="200" text-anchor="middle" fill="#839496" font-size="8" font-style="italic">all workers mmap data.npy read-only · OS page cache shared · _calc_fn_global set by initializer · NUMBA_NUM_THREADS=1</text>
+
+<!-- dispatch arrows down -->
+<line x1="180" y1="162" x2="180" y2="202" stroke="#6c71c4" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#av)"/>
+<line x1="430" y1="162" x2="430" y2="202" stroke="#6c71c4" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#av)"/>
+<line x1="680" y1="162" x2="680" y2="202" stroke="#6c71c4" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#av)"/>
+<text x="305" y="178" text-anchor="middle" fill="#6c71c4" font-size="7.5" font-style="italic">window_id, data_path</text>
+
+<!-- ── Worker 0 ── -->
+<rect x="28" y="204" width="310" height="188" rx="3" fill="none" stroke="#859900" stroke-width="1.2"/>
+<rect x="28" y="204" width="310" height="20" rx="3" fill="#859900" fill-opacity="0.12"/>
+<use href="#chip" x="30" y="205" width="18" height="18"/>
+<text x="185" y="218" text-anchor="middle" fill="#586e75" font-size="9" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">WORKER  0  ·  CPU₀</text>
+
+<text x="183" y="238" text-anchor="middle" fill="#657b83" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">window_id = 0  →  data[0]  shape (250, 50)</text>
+<rect x="38" y="243" width="290" height="10" rx="2" fill="#eee8d5"/>
+<rect x="38" y="243" width="290" height="10" rx="2" fill="#859900" fill-opacity="0.6"/>
+<text x="183" y="251" text-anchor="middle" fill="#fdf6e3" font-size="7">fit_copula(window)  ✓  complete</text>
+
+<text x="183" y="268" text-anchor="middle" fill="#657b83" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">window_id = 4  →  data[4]  shape (250, 50)</text>
+<rect x="38" y="273" width="290" height="10" rx="2" fill="#eee8d5"/>
+<rect x="38" y="273" width="160" height="10" rx="2" fill="#859900" fill-opacity="0.35"/>
+<text x="183" y="281" text-anchor="middle" fill="#586e75" font-size="7">in progress …</text>
+
+<line x1="38" y1="292" x2="318" y2="292" stroke="#eee8d5" stroke-width="0.6"/>
+<text x="183" y="306" text-anchor="middle" fill="#93a1a1" font-size="7.5">mmap → data[window_id]  ·  .astype(float32)</text>
+<text x="183" y="319" text-anchor="middle" fill="#93a1a1" font-size="7.5">kendall_matrix_nb()  →  itau  →  Cholesky  →  sample</text>
+<text x="183" y="332" text-anchor="middle" fill="#93a1a1" font-size="7.5">ppf_transform()  →  (obj, scalar_a, scalar_b)</text>
+<text x="183" y="348" text-anchor="middle" fill="#93a1a1" font-size="7.5">returns  (window_id, obj, var, cvar)</text>
+<text x="183" y="383" text-anchor="middle" fill="#586e75" font-size="8" font-style="italic">CPU₀ fully utilised</text>
+
+<!-- Worker 1 -->
+<rect x="353" y="204" width="310" height="188" rx="3" fill="none" stroke="#859900" stroke-width="1.2"/>
+<rect x="353" y="204" width="310" height="20" rx="3" fill="#859900" fill-opacity="0.12"/>
+<use href="#chip" x="355" y="205" width="18" height="18"/>
+<text x="508" y="218" text-anchor="middle" fill="#586e75" font-size="9" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">WORKER  1  ·  CPU₁</text>
+
+<text x="508" y="238" text-anchor="middle" fill="#657b83" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">window_id = 1  →  data[1]  shape (250, 50)</text>
+<rect x="363" y="243" width="290" height="10" rx="2" fill="#eee8d5"/>
+<rect x="363" y="243" width="290" height="10" rx="2" fill="#859900" fill-opacity="0.6"/>
+<text x="508" y="251" text-anchor="middle" fill="#fdf6e3" font-size="7">fit_copula(window)  ✓  complete</text>
+
+<text x="508" y="268" text-anchor="middle" fill="#657b83" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">window_id = 5  →  data[5]  shape (250, 50)</text>
+<rect x="363" y="273" width="290" height="10" rx="2" fill="#eee8d5"/>
+<rect x="363" y="273" width="80" height="10" rx="2" fill="#859900" fill-opacity="0.35"/>
+<text x="508" y="281" text-anchor="middle" fill="#586e75" font-size="7">in progress …</text>
+
+<line x1="363" y1="292" x2="643" y2="292" stroke="#eee8d5" stroke-width="0.6"/>
+<text x="508" y="306" text-anchor="middle" fill="#93a1a1" font-size="7.5">mmap → data[window_id]  ·  .astype(float32)</text>
+<text x="508" y="319" text-anchor="middle" fill="#93a1a1" font-size="7.5">kendall_matrix_nb()  →  itau  →  Cholesky  →  sample</text>
+<text x="508" y="332" text-anchor="middle" fill="#93a1a1" font-size="7.5">ppf_transform()  →  (obj, scalar_a, scalar_b)</text>
+<text x="508" y="348" text-anchor="middle" fill="#93a1a1" font-size="7.5">returns  (window_id, obj, var, cvar)</text>
+<text x="508" y="383" text-anchor="middle" fill="#586e75" font-size="8" font-style="italic">CPU₁ fully utilised</text>
+
+<!-- Worker N dashed -->
+<rect x="678" y="204" width="384" height="188" rx="3" fill="none" stroke="#93a1a1" stroke-width="1" stroke-dasharray="5,3"/>
+<rect x="678" y="204" width="384" height="20" rx="3" fill="#93a1a1" fill-opacity="0.08"/>
+<use href="#chip" x="680" y="205" width="18" height="18"/>
+<text x="870" y="218" text-anchor="middle" fill="#93a1a1" font-size="9" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">WORKER  N  ·  CPU_N</text>
+<text x="870" y="290" text-anchor="middle" fill="#b3c0c4" font-size="32" font-style="italic">…</text>
+<text x="870" y="360" text-anchor="middle" fill="#93a1a1" font-size="8">picks up next window_id from sliding window</text>
+<text x="870" y="375" text-anchor="middle" fill="#93a1a1" font-size="8">zero idle time at tail — one future per window</text>
+<text x="870" y="383" text-anchor="middle" fill="#93a1a1" font-size="8" font-style="italic">CPU_N fully utilised until window 5999</text>
+
+<!-- return arrows -->
+<line x1="183" y1="392" x2="183" y2="412" stroke="#93a1a1" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#as)"/>
+<line x1="508" y1="392" x2="508" y2="412" stroke="#93a1a1" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#as)"/>
+<line x1="870" y1="392" x2="870" y2="412" stroke="#93a1a1" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#as)"/>
+<text x="350" y="406" text-anchor="middle" fill="#586e75" font-size="7.5" font-style="italic">(window_id, obj, var: f32, cvar: f32)</text>
+
+<!-- ═══════════════════════════════════════════════════
+     SECTION C — RESULT UNPACKING + WRITERS
+═══════════════════════════════════════════════════ -->
+<text x="28" y="428" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="2" font-family="'Courier New',monospace">C · RESULT UNPACKING  &amp;  WRITER THREADS</text>
+<line x1="28" y1="432" x2="1072" y2="432" stroke="#eee8d5" stroke-width="1"/>
+
+<!-- unpack box -->
+<rect x="200" y="438" width="660" height="52" rx="3" fill="none" stroke="#586e75" stroke-width="1"/>
+<text x="530" y="456" text-anchor="middle" fill="#586e75" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">future.result()  UNPACKING  (main process polling loop · time.sleep(0.005))</text>
+<text x="530" y="471" text-anchor="middle" fill="#073642" font-size="9.5" font-family="'Courier New',monospace">window_id_out, obj, scalar_a, scalar_b = future.result()</text>
+<text x="530" y="483" text-anchor="middle" fill="#839496" font-size="8">enqueue to ScalarWriter (every window)  ·  enqueue to ObjectWriter (window_id % object_stride == 0)</text>
+
+<!-- ScalarWriter full box -->
+<rect x="28" y="506" width="500" height="120" rx="3" fill="none" stroke="#2aa198" stroke-width="1.2"/>
+<rect x="28" y="506" width="500" height="18" rx="3" fill="#2aa198" fill-opacity="0.10"/>
+<text x="278" y="519" text-anchor="middle" fill="#2aa198" font-size="8.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">SCALAR WRITER  ·  every window  ·  daemon thread</text>
+<text x="278" y="538" text-anchor="middle" fill="#657b83" font-size="8">Queue  (window_id, scalar_a=VaR, scalar_b=CVaR)  for all 6000 windows</text>
+<text x="278" y="552" text-anchor="middle" fill="#657b83" font-size="8">Condition sleeps until  qsize ≥ flush_threshold (= n_workers × 4)  or  stop()</text>
+<text x="278" y="566" text-anchor="middle" fill="#073642" font-size="8" font-family="'Courier New',monospace">→  scalars_000000.npy,  scalars_000001.npy  …</text>
+<text x="278" y="580" text-anchor="middle" fill="#839496" font-size="7.5">structured array:  window_id (int64) | scalar_a (f32) | scalar_b (f32)</text>
+<text x="278" y="594" text-anchor="middle" fill="#839496" font-size="7.5">stop() flushes remainder  ·  flush counter: 000000, 000001 …</text>
+<text x="278" y="608" text-anchor="middle" fill="#839496" font-size="7.5">used by _find_completed_windows() for resumption</text>
+<text x="278" y="620" text-anchor="middle" fill="#839496" font-size="7.5">collect_scalars() → dict[window_id → (VaR, CVaR)]  ·  checked vs _data_len (not n×chunk)</text>
+
+<!-- ObjectWriter full box -->
+<rect x="548" y="506" width="514" height="120" rx="3" fill="none" stroke="#cb4b16" stroke-width="1.2"/>
+<rect x="548" y="506" width="514" height="18" rx="3" fill="#cb4b16" fill-opacity="0.10"/>
+<text x="805" y="519" text-anchor="middle" fill="#cb4b16" font-size="8.5" font-weight="bold" letter-spacing="1.5" font-family="'Courier New',monospace">OBJECT WRITER  ·  every object_stride windows  ·  daemon thread</text>
+<text x="805" y="538" text-anchor="middle" fill="#657b83" font-size="8">enqueue():  window_id % object_stride ≠ 0  →  dropped before queue</text>
+<text x="805" y="552" text-anchor="middle" fill="#657b83" font-size="8">Condition sleeps until  qsize ≥ object_flush_threshold  or  stop()</text>
+<text x="805" y="566" text-anchor="middle" fill="#073642" font-size="8" font-family="'Courier New',monospace">→  object_000000.pkl,  object_000250.pkl  …</text>
+<text x="805" y="580" text-anchor="middle" fill="#839496" font-size="7.5">6000 / object_stride objects saved  ·  serialised via pickle.dump()</text>
+<text x="805" y="594" text-anchor="middle" fill="#839496" font-size="7.5">obj = copula samples  (n_samples × 50)  uniform [0,1]</text>
+<text x="805" y="608" text-anchor="middle" fill="#839496" font-size="7.5">collect_objects() → dict[window_id → samples array]</text>
+<text x="805" y="620" text-anchor="middle" fill="#839496" font-size="7.5">cleanup() removes all  scalars_*.npy  object_*.pkl  input_data.npy</text>
+
+<!-- arrows unpack → writers -->
+<path d="M370 490 L278 504" stroke="#2aa198" stroke-width="1.2" marker-end="url(#ac)"/>
+<path d="M690 490 L805 504" stroke="#cb4b16" stroke-width="1.2" marker-end="url(#ao)"/>
+
+<!-- ═══════════════════════════════════════════════════
+     SECTION D — COPULA PIPELINE
+═══════════════════════════════════════════════════ -->
+<text x="28" y="650" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="2" font-family="'Courier New',monospace">D · PER-WINDOW COPULA PIPELINE  (runs inside each _worker call)</text>
+<line x1="28" y1="654" x2="1072" y2="654" stroke="#eee8d5" stroke-width="1"/>
+
+<!-- pipeline container -->
+<rect x="28" y="660" width="1044" height="390" rx="4" fill="none" stroke="#93a1a1" stroke-width="0.8"/>
+
+<!-- ── Step 1: Raw data ── -->
+<rect x="44" y="674" width="168" height="360" rx="3" fill="none" stroke="#268bd2" stroke-width="1"/>
+<rect x="44" y="674" width="168" height="18" rx="3" fill="#268bd2" fill-opacity="0.10"/>
+<text x="128" y="686" text-anchor="middle" fill="#268bd2" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">① RAW WINDOW</text>
+<text x="128" y="700" text-anchor="middle" fill="#657b83" font-size="7.5">data[window_id]</text>
+<text x="128" y="712" text-anchor="middle" fill="#839496" font-size="7">shape (250, 50)  float32</text>
+<!-- schematic density curves — raw, skewed -->
+<text x="128" y="730" text-anchor="middle" fill="#93a1a1" font-size="7" font-style="italic">margin distributions</text>
+<!-- asset 0 curve — right-skewed -->
+<path d="M58 800 Q75 740 90 760 Q105 780 115 810 Q125 830 145 820 Q160 815 175 812 L175 820 L58 820 Z"
+      fill="#268bd2" fill-opacity="0.15" stroke="#268bd2" stroke-width="0.8"/>
+<text x="117" y="835" text-anchor="middle" fill="#268bd2" font-size="7">asset₁  (skewed)</text>
+<!-- asset 1 curve — heavy tail -->
+<path d="M58 900 Q70 850 85 860 Q100 870 110 900 Q118 920 128 905 Q142 885 160 895 Q168 900 175 902 L175 910 L58 910 Z"
+      fill="#6c71c4" fill-opacity="0.15" stroke="#6c71c4" stroke-width="0.8"/>
+<text x="117" y="925" text-anchor="middle" fill="#6c71c4" font-size="7">asset₂  (heavy tail)</text>
+<!-- asset 2 curve — near normal -->
+<path d="M58 990 Q80 945 100 948 Q118 945 128 970 Q138 990 148 985 Q160 978 175 992 L175 998 L58 998 Z"
+      fill="#859900" fill-opacity="0.15" stroke="#859900" stroke-width="0.8"/>
+<text x="117" y="1012" text-anchor="middle" fill="#859900" font-size="7">asset₃  (near-normal)</text>
+<text x="128" y="1025" text-anchor="middle" fill="#93a1a1" font-size="7">… 50 assets total</text>
+
+<!-- ── Step 2: Pseudo-obs ── -->
+<rect x="228" y="674" width="168" height="360" rx="3" fill="none" stroke="#6c71c4" stroke-width="1"/>
+<rect x="228" y="674" width="168" height="18" rx="3" fill="#6c71c4" fill-opacity="0.10"/>
+<text x="312" y="686" text-anchor="middle" fill="#6c71c4" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">② PSEUDO-OBS</text>
+<text x="312" y="700" text-anchor="middle" fill="#657b83" font-size="7.5">rank(x) / (n+1)</text>
+<text x="312" y="712" text-anchor="middle" fill="#839496" font-size="7">uniform [0,1] · (250, 50)</text>
+<text x="312" y="730" text-anchor="middle" fill="#93a1a1" font-size="7" font-style="italic">all margins → Uniform(0,1)</text>
+<!-- uniform density rectangles -->
+<rect x="242" y="742" width="130" height="60" rx="2" fill="#6c71c4" fill-opacity="0.08" stroke="#6c71c4" stroke-width="0.7"/>
+<line x1="242" y1="742" x2="372" y2="742" stroke="#6c71c4" stroke-width="1.5"/>
+<line x1="242" y1="802" x2="372" y2="802" stroke="#6c71c4" stroke-width="0.5" stroke-dasharray="3,2"/>
+<text x="307" y="776" text-anchor="middle" fill="#6c71c4" font-size="8.5">U(0,1)</text>
+<text x="242" y="818" fill="#93a1a1" font-size="7">0</text>
+<text x="367" y="818" fill="#93a1a1" font-size="7">1</text>
+
+<rect x="242" y="832" width="130" height="60" rx="2" fill="#6c71c4" fill-opacity="0.08" stroke="#6c71c4" stroke-width="0.7"/>
+<line x1="242" y1="832" x2="372" y2="832" stroke="#6c71c4" stroke-width="1.5"/>
+<text x="307" y="866" text-anchor="middle" fill="#6c71c4" font-size="8.5">U(0,1)</text>
+
+<rect x="242" y="904" width="130" height="60" rx="2" fill="#6c71c4" fill-opacity="0.08" stroke="#6c71c4" stroke-width="0.7"/>
+<line x1="242" y1="904" x2="372" y2="904" stroke="#6c71c4" stroke-width="1.5"/>
+<text x="307" y="938" text-anchor="middle" fill="#6c71c4" font-size="8.5">U(0,1)</text>
+<text x="312" y="1025" text-anchor="middle" fill="#93a1a1" font-size="7">… all 50 dims uniform</text>
+
+<!-- ── Step 3: Kendall τ + itau ── -->
+<rect x="412" y="674" width="168" height="360" rx="3" fill="none" stroke="#b58900" stroke-width="1"/>
+<rect x="412" y="674" width="168" height="18" rx="3" fill="#b58900" fill-opacity="0.10"/>
+<text x="496" y="686" text-anchor="middle" fill="#b58900" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">③ KENDALL τ  +  itau</text>
+<text x="496" y="700" text-anchor="middle" fill="#657b83" font-size="7.5">kendall_matrix_nb()</text>
+<text x="496" y="712" text-anchor="middle" fill="#839496" font-size="7">numba njit · (50×50) matrix</text>
+<text x="496" y="728" text-anchor="middle" fill="#93a1a1" font-size="7" font-style="italic">1225 pairwise τ values</text>
+
+<!-- schematic correlation matrix heatmap -->
+<text x="496" y="748" text-anchor="middle" fill="#93a1a1" font-size="7">τ matrix  (50×50)</text>
+<!-- heatmap grid schematic 6x6 -->
+<g transform="translate(436,752)">
+  <rect x="0"  y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="14" y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.3"/>
+  <rect x="28" y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+  <rect x="42" y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.1"/>
+  <rect x="56" y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.05"/>
+  <rect x="70" y="0"  width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+
+  <rect x="0"  y="14" width="14" height="14" fill="#b58900" fill-opacity="0.3"/>
+  <rect x="14" y="14" width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="28" y="14" width="14" height="14" fill="#b58900" fill-opacity="0.4"/>
+  <rect x="42" y="14" width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+  <rect x="56" y="14" width="14" height="14" fill="#b58900" fill-opacity="0.35"/>
+  <rect x="70" y="14" width="14" height="14" fill="#b58900" fill-opacity="0.1"/>
+
+  <rect x="0"  y="28" width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+  <rect x="14" y="28" width="14" height="14" fill="#b58900" fill-opacity="0.4"/>
+  <rect x="28" y="28" width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="42" y="28" width="14" height="14" fill="#b58900" fill-opacity="0.25"/>
+  <rect x="56" y="28" width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+  <rect x="70" y="28" width="14" height="14" fill="#b58900" fill-opacity="0.3"/>
+
+  <rect x="0"  y="42" width="14" height="14" fill="#b58900" fill-opacity="0.1"/>
+  <rect x="14" y="42" width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+  <rect x="28" y="42" width="14" height="14" fill="#b58900" fill-opacity="0.25"/>
+  <rect x="42" y="42" width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="56" y="42" width="14" height="14" fill="#b58900" fill-opacity="0.4"/>
+  <rect x="70" y="42" width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+
+  <rect x="0"  y="56" width="14" height="14" fill="#b58900" fill-opacity="0.05"/>
+  <rect x="14" y="56" width="14" height="14" fill="#b58900" fill-opacity="0.35"/>
+  <rect x="28" y="56" width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+  <rect x="42" y="56" width="14" height="14" fill="#b58900" fill-opacity="0.4"/>
+  <rect x="56" y="56" width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="70" y="56" width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+
+  <rect x="0"  y="70" width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+  <rect x="14" y="70" width="14" height="14" fill="#b58900" fill-opacity="0.1"/>
+  <rect x="28" y="70" width="14" height="14" fill="#b58900" fill-opacity="0.3"/>
+  <rect x="42" y="70" width="14" height="14" fill="#b58900" fill-opacity="0.15"/>
+  <rect x="56" y="70" width="14" height="14" fill="#b58900" fill-opacity="0.2"/>
+  <rect x="70" y="70" width="14" height="14" fill="#b58900" fill-opacity="0.7"/>
+  <rect x="0" y="0" width="84" height="84" fill="none" stroke="#b58900" stroke-width="0.6"/>
+  <text x="84" y="46" fill="#93a1a1" font-size="8" font-style="italic"> …</text>
+</g>
+
+<text x="496" y="858" text-anchor="middle" fill="#657b83" font-size="7.5" font-family="'Courier New',monospace">ρ = sin(π/2 · τ)   [itau]</text>
+<text x="496" y="872" text-anchor="middle" fill="#839496" font-size="7">correlation matrix (50×50)</text>
+<text x="496" y="892" text-anchor="middle" fill="#657b83" font-size="7.5" font-family="'Courier New',monospace">L = cholesky(ρ)</text>
+<text x="496" y="906" text-anchor="middle" fill="#839496" font-size="7">lower triangular (50×50)</text>
+<text x="496" y="1025" text-anchor="middle" fill="#93a1a1" font-size="7">PSD check + correction</text>
+
+<!-- ── Step 4: t-copula sampling ── -->
+<rect x="596" y="674" width="168" height="360" rx="3" fill="none" stroke="#2aa198" stroke-width="1"/>
+<rect x="596" y="674" width="168" height="18" rx="3" fill="#2aa198" fill-opacity="0.10"/>
+<text x="680" y="686" text-anchor="middle" fill="#2aa198" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">④ t-COPULA SAMPLE</text>
+<text x="680" y="700" text-anchor="middle" fill="#657b83" font-size="7.5">Student-t  df=3</text>
+<text x="680" y="712" text-anchor="middle" fill="#839496" font-size="7">(n_samples × 50)  uniform</text>
+<text x="680" y="728" text-anchor="middle" fill="#93a1a1" font-size="7" font-style="italic">Z ~ N(0,I) · χ²(df)</text>
+<!-- t-distribution density — heavy tails -->
+<text x="680" y="748" text-anchor="middle" fill="#93a1a1" font-size="7">t-distribution  df=3  (per dim)</text>
+<path d="M610 820 Q625 760 645 770 Q658 778 668 800 Q676 818 680 812 Q684 806 692 800 Q705 778 718 770 Q735 760 750 820"
+      fill="none" stroke="#2aa198" stroke-width="1.2"/>
+<path d="M610 820 Q625 760 645 770 Q658 778 668 800 Q676 818 680 812 Q684 806 692 800 Q705 778 718 770 Q735 760 750 820 L750 822 L610 822 Z"
+      fill="#2aa198" fill-opacity="0.12"/>
+<!-- tail shading -->
+<path d="M610 820 Q625 760 640 768 L640 822 L610 822 Z" fill="#2aa198" fill-opacity="0.25"/>
+<path d="M720 768 Q735 760 750 820 L750 822 L720 822 Z" fill="#2aa198" fill-opacity="0.25"/>
+<text x="625" y="834" fill="#2aa198" font-size="6.5">heavy</text>
+<text x="728" y="834" fill="#2aa198" font-size="6.5">tails</text>
+
+<text x="680" y="858" text-anchor="middle" fill="#657b83" font-size="7.5" font-family="'Courier New',monospace">u = t.cdf(t_samples, df=3)</text>
+<text x="680" y="872" text-anchor="middle" fill="#839496" font-size="7">map to uniform via t CDF</text>
+<!-- uniform output density -->
+<rect x="610" y="882" width="140" height="50" rx="2" fill="#2aa198" fill-opacity="0.08" stroke="#2aa198" stroke-width="0.7"/>
+<line x1="610" y1="882" x2="750" y2="882" stroke="#2aa198" stroke-width="1.5"/>
+<text x="680" y="912" text-anchor="middle" fill="#2aa198" font-size="8">U(0,1)  (50 dims)</text>
+<text x="680" y="950" text-anchor="middle" fill="#839496" font-size="7">n_samples = 10 000</text>
+<text x="680" y="964" text-anchor="middle" fill="#839496" font-size="7">tail dependence preserved</text>
+<text x="680" y="1025" text-anchor="middle" fill="#93a1a1" font-size="7">obj = u  saved at stride</text>
+
+<!-- ── Step 5: PPF transform ── -->
+<rect x="780" y="674" width="168" height="360" rx="3" fill="none" stroke="#cb4b16" stroke-width="1"/>
+<rect x="780" y="674" width="168" height="18" rx="3" fill="#cb4b16" fill-opacity="0.10"/>
+<text x="864" y="686" text-anchor="middle" fill="#cb4b16" font-size="8" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">⑤ PPF TRANSFORM</text>
+<text x="864" y="700" text-anchor="middle" fill="#657b83" font-size="7.5">ppf_transform(u, params)</text>
+<text x="864" y="712" text-anchor="middle" fill="#839496" font-size="7">back to original margins</text>
+<text x="864" y="728" text-anchor="middle" fill="#93a1a1" font-size="7" font-style="italic">U(0,1) → original scale</text>
+<!-- reconstructed skewed density -->
+<path d="M794 810 Q808 752 822 762 Q836 772 846 800 Q854 820 862 812 Q870 800 884 808 Q900 818 916 814 Q930 810 942 812 L942 820 L794 820 Z"
+      fill="#cb4b16" fill-opacity="0.12" stroke="#cb4b16" stroke-width="1"/>
+<text x="864" y="835" text-anchor="middle" fill="#cb4b16" font-size="7">restored margin shapes</text>
+
+<path d="M794 900 Q810 858 826 862 Q840 866 852 890 Q860 908 864 900 Q872 885 886 892 Q902 900 918 896 Q930 892 942 900 L942 908 L794 908 Z"
+      fill="#6c71c4" fill-opacity="0.12" stroke="#6c71c4" stroke-width="1"/>
+<path d="M794 978 Q812 940 830 944 Q846 942 856 966 Q864 984 876 978 Q890 970 904 974 Q920 980 942 978 L942 986 L794 986 Z"
+      fill="#859900" fill-opacity="0.12" stroke="#859900" stroke-width="1"/>
+<text x="864" y="1000" text-anchor="middle" fill="#93a1a1" font-size="7">Normal / t / Pareto / Empirical</text>
+<text x="864" y="1025" text-anchor="middle" fill="#93a1a1" font-size="7">margin_params pre-fitted</text>
+
+<!-- ── Step 6: VaR / CVaR ── -->
+<rect x="964" y="674" width="96" height="360" rx="3" fill="none" stroke="#859900" stroke-width="1"/>
+<rect x="964" y="674" width="96" height="18" rx="3" fill="#859900" fill-opacity="0.10"/>
+<text x="1012" y="686" text-anchor="middle" fill="#859900" font-size="7.5" font-weight="bold" font-family="'Courier New',monospace">⑥ VaR/CVaR</text>
+<text x="1012" y="700" text-anchor="middle" fill="#657b83" font-size="7">portfolio loss</text>
+<text x="1012" y="714" text-anchor="middle" fill="#839496" font-size="6.5">-mean(trans, axis=1)</text>
+<!-- portfolio loss distribution -->
+<path d="M972 820 Q984 760 996 768 Q1006 776 1012 800 Q1018 820 1022 812 Q1030 795 1042 810 Q1050 820 1054 818 L1054 822 L972 822 Z"
+      fill="#859900" fill-opacity="0.15" stroke="#859900" stroke-width="1"/>
+<!-- VaR line -->
+<line x1="1042" y1="756" x2="1042" y2="822" stroke="#dc322f" stroke-width="1.2" stroke-dasharray="3,2"/>
+<text x="1046" y="752" fill="#dc322f" font-size="6.5">VaR</text>
+<!-- CVaR shading -->
+<path d="M1042 810 Q1050 820 1054 818 L1054 822 L1042 822 Z" fill="#dc322f" fill-opacity="0.3"/>
+<text x="1012" y="845" text-anchor="middle" fill="#657b83" font-size="7" font-family="'Courier New',monospace">q=0.99</text>
+<text x="1012" y="860" text-anchor="middle" fill="#839496" font-size="6.5">scalar_a = VaR</text>
+<text x="1012" y="874" text-anchor="middle" fill="#839496" font-size="6.5">scalar_b = CVaR</text>
+<text x="1012" y="1025" text-anchor="middle" fill="#93a1a1" font-size="6.5">→ writers</text>
+
+<!-- pipeline arrows -->
+<line x1="212" y1="854" x2="226" y2="854" stroke="#6c71c4" stroke-width="1.2" marker-end="url(#av)"/>
+<line x1="396" y1="854" x2="410" y2="854" stroke="#b58900" stroke-width="1.2" marker-end="url(#ay)"/>
+<line x1="580" y1="854" x2="594" y2="854" stroke="#2aa198" stroke-width="1.2" marker-end="url(#ac)"/>
+<line x1="764" y1="854" x2="778" y2="854" stroke="#cb4b16" stroke-width="1.2" marker-end="url(#ao)"/>
+<line x1="948" y1="854" x2="962" y2="854" stroke="#859900" stroke-width="1.2" marker-end="url(#ag)"/>
+
+<!-- pipeline step labels on arrows -->
+<text x="219" y="850" text-anchor="middle" fill="#6c71c4" font-size="6.5" font-style="italic">ranks</text>
+<text x="403" y="850" text-anchor="middle" fill="#b58900" font-size="6.5" font-style="italic">τ→ρ</text>
+<text x="587" y="850" text-anchor="middle" fill="#2aa198" font-size="6.5" font-style="italic">L·Z</text>
+<text x="771" y="850" text-anchor="middle" fill="#cb4b16" font-size="6.5" font-style="italic">F⁻¹</text>
+<text x="955" y="850" text-anchor="middle" fill="#859900" font-size="6.5" font-style="italic">q</text>
+
+<!-- ═══════════════════════════════════════════════════
+     SECTION E — RESUMPTION + FLOW LEGEND
+═══════════════════════════════════════════════════ -->
+<text x="28" y="1073" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="2" font-family="'Courier New',monospace">E · RESUMPTION  ·  FLOW VARIABLES  ·  COLLECTION</text>
+<line x1="28" y1="1077" x2="1072" y2="1077" stroke="#eee8d5" stroke-width="1"/>
+
+<!-- resumption box -->
+<rect x="28" y="1084" width="340" height="110" rx="3" fill="none" stroke="#b58900" stroke-width="1.2"/>
+<rect x="28" y="1084" width="340" height="18" rx="3" fill="#b58900" fill-opacity="0.10"/>
+<text x="198" y="1097" text-anchor="middle" fill="#b58900" font-size="8.5" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">RESUMPTION</text>
+<text x="198" y="1114" text-anchor="middle" fill="#657b83" font-size="8">_find_completed_windows(): scans all scalars_*.npy</text>
+<text x="198" y="1128" text-anchor="middle" fill="#657b83" font-size="8">window_id present in any scalar file → skip on restart</text>
+<text x="198" y="1142" text-anchor="middle" fill="#839496" font-size="7.5">window granularity — finer than chunk-level</text>
+<text x="198" y="1156" text-anchor="middle" fill="#839496" font-size="7.5">collect_scalars() validates against _data_len=6000</text>
+<text x="198" y="1170" text-anchor="middle" fill="#839496" font-size="7.5">no off-by-one from partial last chunk</text>
+
+<!-- flow variables legend -->
+<rect x="384" y="1084" width="360" height="110" rx="3" fill="none" stroke="#586e75" stroke-width="1"/>
+<rect x="384" y="1084" width="360" height="18" rx="3" fill="#586e75" fill-opacity="0.08"/>
+<text x="564" y="1097" text-anchor="middle" fill="#586e75" font-size="8.5" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">FLOW VARIABLES</text>
+<text x="394" y="1114" fill="#073642" font-size="7.5" font-family="'Courier New',monospace">n_workers</text>
+<text x="470" y="1114" fill="#839496" font-size="7.5">  number of subprocess workers = os.cpu_count()</text>
+<text x="394" y="1128" fill="#073642" font-size="7.5" font-family="'Courier New',monospace">max_in_flight</text>
+<text x="484" y="1128" fill="#839496" font-size="7.5">  futures queued at once = n_workers × 8</text>
+<text x="394" y="1142" fill="#073642" font-size="7.5" font-family="'Courier New',monospace">flush_threshold</text>
+<text x="490" y="1142" fill="#839496" font-size="7.5">  scalar queue depth before disk write = n_workers × 4</text>
+<text x="394" y="1156" fill="#073642" font-size="7.5" font-family="'Courier New',monospace">object_stride</text>
+<text x="476" y="1156" fill="#839496" font-size="7.5">  save copula samples every N windows (default 250)</text>
+<text x="394" y="1170" fill="#073642" font-size="7.5" font-family="'Courier New',monospace">NUMBA_NUM_THREADS=1</text>
+<text x="546" y="1170" fill="#839496" font-size="7.5">  pin numba per worker, avoid oversubscription</text>
+
+<!-- collection box -->
+<rect x="760" y="1084" width="312" height="110" rx="3" fill="none" stroke="#6c71c4" stroke-width="1.2"/>
+<rect x="760" y="1084" width="312" height="18" rx="3" fill="#6c71c4" fill-opacity="0.10"/>
+<text x="916" y="1097" text-anchor="middle" fill="#6c71c4" font-size="8.5" font-weight="bold" letter-spacing="1" font-family="'Courier New',monospace">COLLECTION</text>
+<text x="916" y="1114" text-anchor="middle" fill="#657b83" font-size="8">collect_scalars()  →  dict[window_id → (VaR, CVaR)]</text>
+<text x="916" y="1128" text-anchor="middle" fill="#657b83" font-size="8">collect_objects()  →  dict[window_id → u samples]</text>
+<text x="916" y="1142" text-anchor="middle" fill="#839496" font-size="7.5">scalars: 6000 entries  ·  objects: 6000/stride entries</text>
+<text x="916" y="1156" text-anchor="middle" fill="#839496" font-size="7.5">RuntimeError if any window_id missing</text>
+<text x="916" y="1170" text-anchor="middle" fill="#839496" font-size="7.5">cleanup() removes all temp files after collection</text>
+
+<!-- footer -->
+<line x1="28" y1="1208" x2="1072" y2="1208" stroke="#eee8d5" stroke-width="0.8"/>
+<text x="550" y="1222" text-anchor="middle" fill="#93a1a1" font-size="7.5" font-style="italic">run_simulation.py  ·  ProcessPoolExecutor (spawn)  ·  kendall_matrix_nb (numba njit, cache=True)  ·  empirical_ppf (numba njit, cache=True)</text>
+<text x="550" y="1236" text-anchor="middle" fill="#93a1a1" font-size="7.5" font-style="italic">ScalarWriter + ObjectWriter: daemon threads · threshold-based flush · Condition.wait_for() · zero CPU idle</text>
+<text x="550" y="1250" text-anchor="middle" fill="#93a1a1" font-size="7.5" font-style="italic">one future per window → zero straggler idle time · all CPUs utilised until window 5999</text>
+
+</svg>

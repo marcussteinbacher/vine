@@ -8,7 +8,7 @@ __pycache__
 _marimo
 .ipynb_checkpoints
 .vscode
-assets
+.archive
 data/*
 !data/.gitkeep
 export
