@@ -37,11 +37,11 @@ This study is organized in several modules: The `models` module contains classes
 A complete risk model requires at least the following steps:
 1. Portfolio Construction
 2. Choosing a Volatility Model
-3. Adjusted Returns
+3. Risk-adjustment of Returns
 4. VaR & ES Calculation
 5. Backtesting
 
-> [!INFO]
+> [!NOTE]
 > Every step offers several classes and/or command-line tools.
 
 ## 1. Portfolio Construction
@@ -140,7 +140,9 @@ This will store batch-wise calculated risk forecasts and model summaries in `/te
 cp scripts/build_volatility_data.py .
 python build_volatility_data.py
 ```
-> This will save the aggregated files, e.g. `volatility_forecasts.parquet`, into `data/20/Garch/Empirical/`. Make sure to create the folder(s) in advance!
+
+> [!IMPORTANT] 
+> This will save the aggregated files, e.g. `volatility_forecasts.parquet`, into `data/20/Garch/Empirical/`. Make sure to create the folder(s) first!
 
 ## 3. Adjusted Returns
 Standard risk models often assume that price returns are independent and identically distributed (i.i.d.). However, in reality, volatility varies over time. To use copula models effectively, we must first "de-volatize" the returns and then "re-volatize" them to the current regime.
@@ -256,7 +258,7 @@ python scripts/run_vine_copula.py --help
 ```
 
 > [!TIP]
-> This will save VaR & ES forecasts directly into `data/{portfolio}/{volatility}/{innovation}/{model}/`.
+> This will write VaR & ES forecasts and model summaries directly into the simulation folder once its completed. Temporary results are kept in a the `temp/` directory.
 
 **Concurrent Implementation & Cloud Scalability**
 The risk forecasts (multivariate copula & vine copula) are calculated concurrently in `tools.Runner` using a `ProcessPoolExecutor`. This architecture is designed for massive, window-based computations.
@@ -268,9 +270,6 @@ The risk forecasts (multivariate copula & vine copula) are calculated concurrent
 - **Resumability**: The `Runner` class uses a `ScalarWriter` and `ObjectWriter` to save results window-by-window. If a calculation is interrupted, it can is  auto-resumed from the last checkpoint.
 - **Spot Instance Friendly**: This resumable nature makes it ideal for **Cloud Compute Spot Instances** (e.g., AWS Spot, Google Preemptible VMs). You can save significantly on compute costs without the risk of losing days of progress if an instance is reclaimed.
 
-> [!IMPORTANT]
-> A simulation is complete if there is `VaR.parquet` or `ES.parquet` in the child directory.
-
 All completed simulation paths can be inspected via
 
 ```bash
@@ -279,7 +278,7 @@ show_complete_simulations
 ```
 
 ## 5. Model Analysis & Backtesting
-A risk model is only as good as its performance in the real world. We provide a suite of statistical tests in the `backtest` module to validate our VaR and ES forecasts.
+A risk model is only as good as its performance in the real world. I provide a suite of statistical tests in the `backtest` module to validate our VaR and ES forecasts.
 
 ### 5.1 VaR Backtests
 - **Kupiec Test (1995)**: An unconditional coverage test that verifies if the total number of violations is consistent with the theoretical $\alpha$ level.
