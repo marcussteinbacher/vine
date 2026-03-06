@@ -41,8 +41,8 @@ A complete risk model requires at least the following steps:
 4. VaR & ES Calculation
 5. Backtesting
 
- Every step offers several classes and/or command-line tools.
-> To run a script copy/move it from `/scripts` into root, e.g. where `config.py` is located!
+> [!INFO]
+> Every step offers several classes and/or command-line tools.
 
 ## 1. Portfolio Construction
 The starting point for each model is a specific portfolio, e.g. a portfolio with 20 assets. Financial time-series often suffer from missing data due to staggered listings, de-listings, or holidays. To maintain a constant portfolio dimension over time, we employ **Hot-Deck Imputation**. This technique involves replacing missing values (receivers) with observed values from comparable series (donors).
@@ -88,18 +88,30 @@ To adjust the log-returns to the current level of volatility, one must choose a 
 ### 2.1 Volatility Process
 All models assume a constant mean $\mu$. The conditional variance $\sigma_t^2$ is modelled as follows:
 
-**GARCH(1,1)**: A symmetrical process where persistence is captured by past squared residuals and past variance. <br>
-  $$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+**GARCH(1,1)**: A symmetrical process where persistence is captured by past squared residuals and past variance.
 
-**GJR-GARCH(1,1,1)**: An asymmetrical process that accounts for the "leverage effect" (negative shocks often increase volatility more than positive shocks). <br>
-$$\sigma_t^2 = \omega + (\alpha + \gamma I_{t-1}) \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+```math
+\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2
+```
+
+**GJR-GARCH(1,1,1)**: An asymmetrical process that accounts for the "leverage effect" (negative shocks often increase volatility more than positive shocks).
+
+```math
+\sigma_t^2 = \omega + (\alpha + \gamma I_{t-1}) \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2
+```
 where $I_{t-1} = 1$ if $\epsilon_{t-1} < 0$, and 0 otherwise.
 
-**EGARCH(1,1,1)**: An exponential model that ensures positive variance and captures asymmetric impacts in log-space. <br>
-  $$\ln(\sigma_t^2) = \omega + \alpha | \frac{\epsilon_{t-1}}{\sigma_{t-1}} - E[|\frac{\epsilon_{t-1}}{\sigma_{t-1}}|] | + \gamma \frac{\epsilon_{t-1}}{\sigma_{t-1}} + \beta \ln(\sigma_{t-1}^2)$$
+**EGARCH(1,1,1)**: An exponential model that ensures positive variance and captures asymmetric impacts in log-space.
 
-**EWMA**: Exponentially Weighted Moving Average, a common industry standard (RiskMetrics). <br>
-  $$\sigma_t^2 = \lambda \sigma_{t-1}^2 + (1-\lambda) \epsilon_{t-1}^2$$
+```math
+\ln(\sigma_t^2) = \omega + \alpha | \frac{\epsilon_{t-1}}{\sigma_{t-1}} - E[|\frac{\epsilon_{t-1}}{\sigma_{t-1}}|] | + \gamma \frac{\epsilon_{t-1}}{\sigma_{t-1}} + \beta \ln(\sigma_{t-1}^2)
+```
+
+**EWMA**: Exponentially Weighted Moving Average, a common industry standard (RiskMetrics).
+
+```math
+\sigma_t^2 = \lambda \sigma_{t-1}^2 + (1-\lambda) \epsilon_{t-1}^2
+```
 
 ### 2.2 Innovation Distribution
 Every volatility process is paired with an assumption about the distribution of the innovations $z_t = \epsilon_t / \sigma_t$:
@@ -135,7 +147,10 @@ Standard risk models often assume that price returns are independent and identic
 
 The one day-ahead VaR and ES forecasts are calculated in a rolling window manner based on **Adjusted Returns**. For each window $[t, T]$, the returns $r_t$ are adjusted to the forecast volatility $\sigma_T$ using the ratio:
 
-$$\tilde{r_t} = \frac{\sigma_T}{\sigma_t} \cdot r_t$$
+```math
+\tilde{r_t} = \frac{\sigma_T}{\sigma_t} \cdot r_t
+```
+
 This transformation (found in `models/AdjustedReturn.py`) ensures that the historical data used for copula fitting is representative of the current market volatility environment.
 
 ```python
@@ -155,17 +170,23 @@ Figure 3 investigates the adjusted ($\tilde{r_t}$) and unscaled returns $r_t$ an
 **Figure 3**: Adjusted vs. un-adjusted return and adjustement factor for an arbitrary window and asset.
 
 > [!NOTE]
-> Due to the nature of the adjustment process the last adjustement facot rin each window is always one.
+> Due to the nature of the adjustment process the last adjustement facor in each window evaluates to one.
 
 ## 4. Value at Risk (VaR) & Expected Shortfall (ES)
 This package calculates one-day ahead risk forecasts using adjusted returns. We focus on two primary risk measures:
 
 ### 4.1 Mathematical Definitions
-- **Value at Risk (VaR)**: The maximum potential loss over a given time horizon at a specific confidence level $(1-\alpha)$.
-  $$VaR_\alpha(X) = \inf \{ x \in \mathbb{R} : P(X + x < 0) \leq \alpha \}$$
-- **Expected Shortfall (ES)**: Also known as Conditional VaR (CVaR), it measures the average loss given that the loss exceeds the VaR level.
-  $$ES_\alpha(X) = E[X | X < -VaR_\alpha(X)]$$
+**Value at Risk (VaR)**: The maximum potential loss over a given time horizon at a specific confidence level $(1-\alpha)$.
 
+```math
+VaR_\alpha(X) = \inf \{ x \in \mathbb{R} : P(X + x < 0) \leq \alpha \}
+```
+
+**Expected Shortfall (ES)**: Also known as Conditional VaR (CVaR), it measures the average loss given that the loss exceeds the VaR level.
+
+```math
+ES_\alpha(X) = E[X | X < -VaR_\alpha(X)]
+```
 The risk estimation is conducted in a rolling window manner using adjusted returns, in other words, the next-day risk measure is forecasted based on the previous 250 (adjusted) portfolio returns.
 
 ### 4.2 Coherent Risk Measures
