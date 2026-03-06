@@ -8,13 +8,11 @@ from tqdm import tqdm
 import logging
 import time
 import warnings
-import itertools
 import argparse
 import json
 import config
 from tools.Helpers import chunks, StoreDict
 import pickle as pkl
-import sys
 import os
 from tools.Helpers import save_checkpoint, get_checkpoint
 

@@ -20,7 +20,8 @@ The so-called market risk is of crucial concern for financial institutions hence
 From a mathematical point of view this is a simple “quantile of the profit-and-loss (P&L) distribution of a given portfolio over a prescribed holding period” (McNeil & Frey, 2000).
 Although its conceptual simplicity and ease of computation made VaR the usual financial risk measure, Artzner et al. (1999) indicate some major theoretical deficiencies
 of the concept, first and foremost that it disregards any losses beyond the specified level $\alpha$, a circumstance referred to as ‘tail risk’ (see Yamai & Yoshiba, 2005).
-![Tail Risk](assets/es_tail_risk.svg) <br>
+
+![Tail Risk](assets/es_tail_risk.svg)
 
 **Figure 1**: A visual representation of the tail-risk associated with an $\alpha$-level VaR of an aribtrary distribution of portfolio returns.
 
@@ -75,32 +76,39 @@ imputer = MaximumCoverageImputation(returns, tickers=init, n=N)
 # Tuple of the daily portfolio composition and return
 df_p, df_r = imputer.impute()
 ```
-TODO: Add figure
+Figure 2 shows an example of a fully populated portfolio of ten risk factors constructed with a maximum coverage strategy and initialized with ten randomly chosen Nasdaq 100 constituents.
+
+![Portfolio](assets/portfolio_example.svg)
+
+**Figure 2**: A fully populated portfolio ten risk factors.
 
 ## 2. Choosing a Volatility Model
 To adjust the log-returns to the current level of volatility, one must choose a volatility model. Financial returns are famously characterized by "volatility clustering"—periods of high volatility followed by periods of relative calm. We model this using the GARCH family of processes.
 
-### Model Formulations
+### 2.1 Volatility Process
 All models assume a constant mean $\mu$. The conditional variance $\sigma_t^2$ is modelled as follows:
 
-- **GARCH(1,1)**: A symmetrical process where persistence is captured by past squared residuals and past variance.
+**GARCH(1,1)**: A symmetrical process where persistence is captured by past squared residuals and past variance. <br>
   $$\sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
-- **GJR-GARCH(1,1,1)**: An asymmetrical process that accounts for the "leverage effect" (negative shocks often increase volatility more than positive shocks).
-  $$\sigma_t^2 = \omega + (\alpha + \gamma I_{t-1}) \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
-  where $I_{t-1} = 1$ if $\epsilon_{t-1} < 0$, and 0 otherwise.
-- **EGARCH(1,1,1)**: An exponential model that ensures positive variance and captures asymmetric impacts in log-space.
+
+**GJR-GARCH(1,1,1)**: An asymmetrical process that accounts for the "leverage effect" (negative shocks often increase volatility more than positive shocks). <br>
+$$\sigma_t^2 = \omega + (\alpha + \gamma I_{t-1}) \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+where $I_{t-1} = 1$ if $\epsilon_{t-1} < 0$, and 0 otherwise.
+
+**EGARCH(1,1,1)**: An exponential model that ensures positive variance and captures asymmetric impacts in log-space. <br>
   $$\ln(\sigma_t^2) = \omega + \alpha | \frac{\epsilon_{t-1}}{\sigma_{t-1}} - E[|\frac{\epsilon_{t-1}}{\sigma_{t-1}}|] | + \gamma \frac{\epsilon_{t-1}}{\sigma_{t-1}} + \beta \ln(\sigma_{t-1}^2)$$
-- **EWMA**: Exponentially Weighted Moving Average, a common industry standard (RiskMetrics).
+
+**EWMA**: Exponentially Weighted Moving Average, a common industry standard (RiskMetrics). <br>
   $$\sigma_t^2 = \lambda \sigma_{t-1}^2 + (1-\lambda) \epsilon_{t-1}^2$$
 
-### Innovation Distributions
+### 2.2 Innovation Distribution
 Every volatility process is paired with an assumption about the distribution of the innovations $z_t = \epsilon_t / \sigma_t$:
 - **Normal**: Standard Gaussian assumption.
 - **Student's t**: Captures excess kurtosis (fat tails) in the residuals.
 - **Empirical**: Uses a non-parametric approach (KDE or histogram) to model the distribution, allowing for arbitrary shapes.
 - **Generalized Error (GED)**: A flexible family that includes normal and Laplace distributions.
 
-### Resolution Order & Convergence
+### 2.3 Resolution Order & Convergence
 Fitting GARCH models can be numerically unstable. Our implementation in `models/Volatility.py` uses a **Resolution Order** to ensure robustness:
 1. Attempt to fit the primary model (e.g., GJR-GARCH).
 2. If convergence fails, fallback to a simpler model (e.g., GARCH(1,1)).
@@ -140,7 +148,14 @@ volatilities = pd.read_parquet("data/20/Garch/Normal/volatility_forecasts.parque
 adj_returns = adjusted_return_windows(returns, volatilities)
 ```
 
-TODO: Add figure: Adj. return, vs. adj. factor, vs. return in one window
+Figure 3 investigates the adjusted ($\tilde{r_t}$) and unscaled returns $r_t$ and the adjustment factor $\rho_t$ for an arbitrary window and asset.
+
+![Adjusted Return](assets/adjusted_return_example.svg)
+
+**Figure 3**: Adjusted vs. un-adjusted return and adjustement factor for an arbitrary window and asset.
+
+> [!NOTE]
+> Due to the nature of the adjustment process the last adjustement facot rin each window is always one.
 
 ## 4. Value at Risk (VaR) & Expected Shortfall (ES)
 This package calculates one-day ahead risk forecasts using adjusted returns. We focus on two primary risk measures:
@@ -151,9 +166,7 @@ This package calculates one-day ahead risk forecasts using adjusted returns. We 
 - **Expected Shortfall (ES)**: Also known as Conditional VaR (CVaR), it measures the average loss given that the loss exceeds the VaR level.
   $$ES_\alpha(X) = E[X | X < -VaR_\alpha(X)]$$
 
-The risk estimation is conducted in a rolling window manner using adjusted returns, in other words, the next-day risk measure is forecasted based on the previous N adjusted returns.
-
-TODO: Figure one window VaR & ES
+The risk estimation is conducted in a rolling window manner using adjusted returns, in other words, the next-day risk measure is forecasted based on the previous 250 (adjusted) portfolio returns.
 
 ### 4.2 Coherent Risk Measures
 According to Artzner et al. (1999), a risk measure is **coherent** if it satisfies four properties: Monotonicity, Subadditivity, Homogeneity, and Translational Invariance. While VaR is widely used, it is **not coherent** because it fails the subadditivity test. **ES is a coherent risk measure**, making it a superior choice for tail risk management.
@@ -163,6 +176,12 @@ According to Artzner et al. (1999), a risk measure is **coherent** if it satisfi
 A non-parametric approach that uses historical returns as the distribution for future returns.
 This benchmark model is a simple historical simulation approach where I estimate the day-ahead VaR as empirical quantile of the last 250 adjusted portfolio return observations in a rolling window manner for each window.
 The natural estimator for the ES is simply given by the arithmetic mean of the worst 1% observations in each window.
+
+Figure 4 shows the next-day risk estimate for an arbitrary window.
+
+![VaR ES](assets/var_es_hist_example.svg)
+
+**Figure 4**: Simulation of the next-day risk estimates in an arbitrary window.
 
 #### 4.3.2 Variance-Covariance (VC) 
 Assumes returns follow a multivariate normal distribution.
@@ -188,9 +207,13 @@ Uses multivariate copulas to model the dependence structure between assets. The 
 The flagship model. It decomposes the $N$-dimensional multivariate distribution into $N(N-1)/2$ bivariate "pair-copulas".
 The simulation process is the same as for the multivariate copula.
 
-TODO: Example: Vine network chart
+Figure 5 shows an example of the vin structure in an arbitraray window. It contains the first three trees in a portfolio of six assets.
 
-### Running the Risk Forecasts
+![Vine](assets/example_vine.svg)
+
+**Figure 5**: First three trees of the vine in an arbitrary window for a six-dimensional portfolio.
+
+### 4.4 Running the Risk Forecasts
 To create a risk forecast, use the scripts in the `scripts/` folder. For a Vine Copula simulation:
 
 ```bash
@@ -214,12 +237,12 @@ python scripts/run_vine_copula.py --help
 > [!TIP]
 > This will save VaR & ES forecasts directly into `data/{portfolio}/{volatility}/{innovation}/{model}/`.
 
-### Concurrent Implementation & Cloud Scalability
+**Concurrent Implementation & Cloud Scalability**
 The risk forecasts (multivariate copula & vine copula) are calculated concurrently in `tools.Runner` using a `ProcessPoolExecutor`. This architecture is designed for massive, window-based computations.
 
 ![Runner](assets/runner_architecture.svg)
 
-#### Cloud-Ready Features
+**Cloud-Ready Features**
 - **Parallelism**: Efficiently utilizes all available CPU cores.
 - **Resumability**: The `Runner` class uses a `ScalarWriter` and `ObjectWriter` to save results window-by-window. If a calculation is interrupted, it can is  auto-resumed from the last checkpoint.
 - **Spot Instance Friendly**: This resumable nature makes it ideal for **Cloud Compute Spot Instances** (e.g., AWS Spot, Google Preemptible VMs). You can save significantly on compute costs without the risk of losing days of progress if an instance is reclaimed.
@@ -237,20 +260,20 @@ show_complete_simulations
 ## 5. Model Analysis & Backtesting
 A risk model is only as good as its performance in the real world. We provide a suite of statistical tests in the `backtest` module to validate our VaR and ES forecasts.
 
-### VaR Backtests
+### 5.1 VaR Backtests
 - **Kupiec Test (1995)**: An unconditional coverage test that verifies if the total number of violations is consistent with the theoretical $\alpha$ level.
 - **Christoffersen Test (1998)**: A conditional coverage test that evaluates whether violations are independent. A good model should not exhibit "volatility clusters" where one violation is followed by another.
 - **Duration Test (Christoffersen & Pelletier, 2004)**: Examines the time between violations. Under the null hypothesis of a correctly specified model, these durations should be memoryless (follow an exponential distribution).
 
-### ES Backtest
+### 5.2 ES Backtest
 - **McNeil and Frey Test (2000)**: Since Expected Shortfall is a conditional mean, we test the "excess shortfall" (the difference between actual loss and the ES forecast on violation days). We use a bootstrap-based t-test to check if the mean of these exceedances is zero.
 
-### Visualization Tools
+### 5.3 Visualization Tools
 The `tools` module offers several analysis tools:
 - **`tools.Graphs`**: Network visualization and inspection of Vine Copula structures.
 - **`tools.Plotting`**: Comprehensive plotting utilities for returns, volatility, and risk metrics.
 
-## References
+## 6 References
 Artzner, P., Delbaen, F., Eber, J.M., Heath, D. (1999). Coherent Measures of Risk, Mathematical Finance, 9(3), pp. 203–228.
 
 Christofferson P.F. (1998). Evaluating Interval Forecasts, International Economic Review, 39(4), pp. 841-862.
