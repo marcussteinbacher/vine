@@ -1,6 +1,7 @@
 import os 
 import argparse
 import pandas as pd
+import numpy as np
 import copulae as cp
 from functools import partial
 from models import AdjustedReturn, MultivariateCopula
@@ -8,10 +9,11 @@ import time
 import json
 import config
 import logging
-from tools.Helpers import Parameters, StoreDict, save_scalars, save_objects, save_params
+from tools.Helpers import Parameters, StoreDict, _get_path, save_objects, save_params
 from tools.Runner import Runner
 from simulations.MultivariateCopula import simulate_mvc
 import multiprocessing as mp
+
 
 # Force spawn
 mp.set_start_method("spawn", force=True)
@@ -175,17 +177,31 @@ def main():
     logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")
 
     # Collecting results
+    print("Collecting results...")
     scalars = runner.collect_scalars()
-    cops = runner.collect_objects()
+    objects = runner.collect_objects()
 
     if not args.keep:
         runner.cleanup()
 
     # Save aggregated data: VaR.parquet, ES.parquet, models.pkl, params.json
+    
+    path = _get_path(params)
+
     index = fut_index[-len(scalars):]
-    save_scalars(scalars,index)
-    save_objects(cops)
+    var_series = pd.Series([v[0][0] for v in scalars.values()],index=index) # (N,) 
+    es_series = pd.Series([v[1][0] for v in scalars.values()],index=index) # (N,)
+
+    var_series.to_frame(name="var").to_parquet(path+"VaR.parquet")
+    print(path+"VaR.parquet written!")
+
+    es_series.to_frame(name="es").to_parquet(path+"ES.parquet")
+    print(path+"ES.parquet written!")
+
+    save_objects(objects)
+    
     save_params()
     
+
 if __name__ == "__main__":
     main()

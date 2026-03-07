@@ -162,7 +162,7 @@ from models.AdjustedReturn import adjusted_return_windows
 returns = pd.read_parquet("data/20/portfolio_returns.parquet")
 volatilities = pd.read_parquet("data/20/Garch/Normal/volatility_forecasts.parquet")
 
-win_idcs, adj_returns = adjusted_return_windows(returns, volatilities)
+win_idcs, adj_return_wins = adjusted_return_windows(returns, volatilities)
 ```
 
 Figure 3 investigates the adjusted ($\tilde{r_t}$) and unscaled returns $r_t$ and the adjustment factor $\rho_t$ for an arbitrary window and asset.

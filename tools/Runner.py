@@ -5,10 +5,12 @@ Runner — concurrent, resumable per-window numpy processing.
 - One future per window — eliminates straggler / tail idle time
 - Calculation function passed directly, works with functools.partial
 - Spawn-safe: calc_fn delivered via initializer
-- ScalarWriter  : saves (window_id, scalar_a, scalar_b) for every window
+- ScalarWriter  : saves (scalar_a, scalar_b) per window as float32 arrays
+                  of arbitrary length — works for both scalar (shape (1,))
+                  and vector (shape (n_assets,)) returns
 - ObjectWriter  : saves obj via pickle every ``object_stride`` windows
 - Resumption at window granularity
-- Inner + outer tqdm progress bars
+- Single tqdm progress bar
 """
 
 import pickle
@@ -32,7 +34,7 @@ DTYPE = np.float32
 # Worker — module-level globals set once per process by _worker_init
 # ---------------------------------------------------------------------------
 
-_calc_fn_global        = None   # the calculation callable
+_calc_fn_global = None   # the calculation callable
 
 
 def _worker_init(calc_fn):
@@ -47,24 +49,38 @@ def _worker_init(calc_fn):
 
 def _worker(window_id: int, data_path: str) -> tuple:
     """
-    Process a single window (250 × 50).
+    Process a single window.
     Loads the array via mmap, slices window_id, applies _calc_fn_global.
-    Returns (window_id, obj, scalar_a, scalar_b).
+
+    Returns (window_id, obj, scalar_a, scalar_b) where scalar_a and
+    scalar_b are always 1-D float32 arrays of arbitrary length:
+      - scalar return  (float / 0-d array) -> shape (1,)
+      - vector return  (np.ndarray)         -> shape (n,)  unchanged
     """
     data   = np.load(data_path, mmap_mode="r")
-    window = data[window_id].astype(DTYPE)          # shape (250, 50)
+    window = data[window_id].astype(DTYPE)
     obj, scalar_a, scalar_b = _calc_fn_global(window)
-    return window_id, obj, float(scalar_a), float(scalar_b)
+    return (
+        window_id,
+        obj,
+        np.atleast_1d(np.asarray(scalar_a, dtype=DTYPE)),
+        np.atleast_1d(np.asarray(scalar_b, dtype=DTYPE)),
+    )
 
 
 # ---------------------------------------------------------------------------
-# Scalar writer — every window, two floats
+# Scalar writer — every window, arrays of arbitrary length
 # ---------------------------------------------------------------------------
 
 class ScalarWriter(threading.Thread):
     """
-    Daemon thread. Writes scalars_NNNNNN.npy files — one structured array
-    per flush batch with columns: window_id (int64), scalar_a (f32), scalar_b (f32).
+    Daemon thread. Writes scalars_NNNNNN.npz files — one archive per flush
+    batch. Each archive contains keys '<window_id>_a' and '<window_id>_b'
+    mapping to float32 arrays of arbitrary length.
+
+    This handles both scalar metrics (shape (1,)) and per-asset vectors
+    (shape (n_assets,)) without any structural change to the writer.
+
     Flushes when flush_threshold items accumulate or stop() is called.
     """
 
@@ -77,7 +93,7 @@ class ScalarWriter(threading.Thread):
         self._cond           = threading.Condition()
         self._flush_counter  = 0
 
-    def enqueue(self, window_id: int, scalar_a: float, scalar_b: float):
+    def enqueue(self, window_id: int, scalar_a: np.ndarray, scalar_b: np.ndarray):
         self._queue.put((window_id, scalar_a, scalar_b))
         if self._queue.qsize() >= self.flush_threshold:
             with self._cond:
@@ -106,20 +122,25 @@ class ScalarWriter(threading.Thread):
         try:
             while True:
                 window_id, a, b = self._queue.get_nowait()
-                pending[window_id] = (float(a), float(b))
+                pending[window_id] = (
+                    np.atleast_1d(np.asarray(a, dtype=DTYPE)),
+                    np.atleast_1d(np.asarray(b, dtype=DTYPE)),
+                )
         except queue.Empty:
             pass
 
         if not pending:
             return
 
-        rows = np.array(
-            [(wid, a, b) for wid, (a, b) in pending.items()],
-            dtype=[("window_id", np.int64), ("scalar_a", DTYPE), ("scalar_b", DTYPE)],
-        )
-        path = self.temp_dir / f"scalars_{self._flush_counter:06d}.npy"
+        # store as {<wid>_a: array, <wid>_b: array} in a single .npz archive
+        arrays = {}
+        for wid, (a, b) in pending.items():
+            arrays[f"{wid}_a"] = a
+            arrays[f"{wid}_b"] = b
+
+        path = self.temp_dir / f"scalars_{self._flush_counter:06d}.npz"
         self._flush_counter += 1
-        np.save(path, rows)
+        np.savez(path, **arrays)
         logger.info("ScalarWriter flushed %d entries -> %s", len(pending), path.name)
 
 
@@ -145,7 +166,7 @@ class ObjectWriter(threading.Thread):
 
     def enqueue(self, window_id: int, obj):
         if self.stride == -1 or window_id % self.stride != 0:
-            return                              # not a stride boundary — drop
+            return                              # not a stride boundary or -1 for no saving — drop
         self._queue.put((window_id, obj))
         if self._queue.qsize() >= self.flush_threshold:
             with self._cond:
@@ -198,12 +219,21 @@ class Runner:
     the very last window (no straggler / tail idle time).
 
     The calculation function receives a single (H, W) window and must return:
-        tuple[obj, float, float]
-    where obj is any picklable object and the two floats are scalar metrics.
+        tuple[obj, scalar_a, scalar_b]
+    where:
+        obj      -- any picklable object
+        scalar_a -- float, 0-d array, or 1-D array of length n
+                    (e.g. VaR scalar or per-asset vol vector)
+        scalar_b -- float, 0-d array, or 1-D array of length n
+                    (e.g. CVaR scalar or np.nan placeholder)
 
-    Scalars  : saved for every window  → scalars_NNNNNN.npy
-    Objects  : saved every object_stride windows → object_NNNNNN.pkl
-    Resumption: at window granularity — already-computed windows are skipped.
+    Both scalar_a and scalar_b are stored as float32 arrays of whatever
+    length your function returns. Shape (1,) for scalars, (n_assets,) for
+    per-asset vectors. collect_scalars() returns them as-is.
+
+    Scalars  : saved for every window  -> scalars_NNNNNN.npz
+    Objects  : saved every object_stride windows -> object_NNNNNN.pkl
+    Resumption: at window granularity -- already-computed windows are skipped.
 
     Parameters
     ----------
@@ -354,20 +384,38 @@ class Runner:
 
         Returns
         -------
-        dict mapping window_id -> (scalar_a, scalar_b), sorted by window_id.
-        Raises RuntimeError if any window is missing.
+        dict mapping window_id -> (scalar_a, scalar_b) sorted by window_id,
+        where scalar_a and scalar_b are float32 arrays:
+            shape (1,)        for scalar returns  (VaR, CVaR)
+            shape (n_assets,) for vector returns  (per-asset vol)
+
+        Usage examples
+        --------------
+        # scalar case — VaR / CVaR
+        scalars     = runner.collect_scalars()
+        var_series  = np.array([v[0][0] for v in scalars.values()])  # (N,)
+        cvar_series = np.array([v[1][0] for v in scalars.values()])  # (N,)
+
+        # vector case — per-asset volatility
+        scalars     = runner.collect_scalars()
+        vol_matrix  = np.stack([v[0] for v in scalars.values()])     # (N, n_assets)
+
+        Raises
+        ------
+        RuntimeError if any windows are missing.
         """
-        all_files = sorted(self.temp_dir.glob("scalars_*.npy"))
+        all_files = sorted(self.temp_dir.glob("scalars_*.npz"))
         if not all_files:
             raise RuntimeError("No scalar checkpoints found. Did run() complete?")
 
         raw = {}
         for path in all_files:
-            for row in np.load(path):
-                raw[int(row["window_id"])] = (float(row["scalar_a"]), float(row["scalar_b"]))
+            with np.load(path) as f:
+                # keys are '<wid>_a' and '<wid>_b' — extract wids from _a keys only
+                wids = {int(k.rsplit("_", 1)[0]) for k in f.files if k.endswith("_a")}
+                for wid in wids:
+                    raw[wid] = (f[f"{wid}_a"].copy(), f[f"{wid}_b"].copy())
 
-        # use _data_len — not n_chunks * chunk_size — to avoid off-by-one
-        # on the last partial chunk
         missing = set(range(self._data_len)) - raw.keys()
         if missing:
             raise RuntimeError(
@@ -394,7 +442,7 @@ class Runner:
 
     def cleanup(self) -> None:
         """Delete all temporary files written by this runner."""
-        for pattern in ("scalars_*.npy", "object_*.pkl", "input_data.npy"):
+        for pattern in ("scalars_*.npz", "object_*.pkl", "input_data.npy"):
             for p in self.temp_dir.glob(pattern):
                 p.unlink(missing_ok=True)
         logger.info("Temporary files removed from %s", self.temp_dir)
@@ -406,10 +454,13 @@ class Runner:
     def _find_completed_windows(self) -> set:
         """Scan all scalar checkpoint files and return the set of done window_ids."""
         completed = set()
-        for path in self.temp_dir.glob("scalars_*.npy"):
+        for path in self.temp_dir.glob("scalars_*.npz"):
             try:
-                for row in np.load(path):
-                    completed.add(int(row["window_id"]))
+                with np.load(path) as f:
+                    # keys are '<wid>_a' and '<wid>_b' — only read _a to avoid duplicates
+                    for key in f.files:
+                        if key.endswith("_a"):
+                            completed.add(int(key.rsplit("_", 1)[0]))
             except Exception:
                 pass
         return completed

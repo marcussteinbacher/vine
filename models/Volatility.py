@@ -322,7 +322,7 @@ class Garch:
         #distribution_model = Empirical # Distribution of the standardized residuals
 
     
-    def volatility_forecast(self, series:np.ndarray)-> tuple[ARCHResult|float, float]:
+    def volatility_forecast(self, series:np.ndarray)-> tuple[ARCHResult|float, float|np.ndarray, float|np.ndarray]:
         """
         One-day ahead volatility forecast for a series of returns. Returns a tuple of the fitted 
         model and the one-day-ahead volatility forecast.
@@ -336,7 +336,7 @@ class Garch:
 
         if np.isnan(series).any():
             # Can't calculate volatility forecast for a series that conatins nan
-            return np.nan, np.nan
+            return np.nan, np.nan, np.nan
         
         am = self.mean_model(series,**self.mean_kwargs)
 
@@ -372,7 +372,7 @@ class Garch:
                 vol_forecast = res.forecast(horizon=1).variance.values[0][0]
                 break 
         
-        return ARCHResult(res), np.sqrt(vol_forecast/np.power(res.scale, 2)).astype(np.float32)
+        return ARCHResult(res), np.sqrt(vol_forecast/np.power(res.scale, 2)).astype(np.float32), np.nan
     
     @classmethod
     def nic(cls, epsilon, sigma_2, params):
