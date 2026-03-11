@@ -195,6 +195,24 @@ A non-parametric approach that uses historical returns as the distribution for f
 This benchmark model is a simple historical simulation approach where I estimate the day-ahead VaR as empirical quantile of the last 250 adjusted portfolio return observations in a rolling window manner for each window.
 The natural estimator for the ES is simply given by the arithmetic mean of the worst 1% observations in each window.
 
+**Usage:**
+```batch
+cp scripts/run_historical_simulation.py .
+python run_historical_simulation.py -p 20 -vm Garch -id Empirical
+```
+
+**Common Arguments:**
+- `-p`, `--portfolio`: Portfolio size.
+- `-vm`, `--volatility_model`: (`Garch`, `Egarch`, `GJR`).
+- `-id`, `--innovation_distribution`: (`Normal`, `StudentsT`, `Empirical`, `GeneralizedError`).
+- `--alpha`: Confidence level (default: 0.01).
+- ...
+
+For all available options see:
+```bash
+python scripts/run_historical_simulation.py --help
+```
+
 Figure 4 shows the next-day risk estimate for an arbitrary window.
 
 ![VaR ES](assets/var_es_hist_example.svg)
@@ -218,8 +236,48 @@ For the next-day ES, expressed as the expected return below the $\alpha$-quantil
 ETR_{\alpha,t+1} =\frac{1}{\alpha} \int_{-\infty}^{Q_{\alpha,t+1}} x f(x)dx
 ```
 
+**Usage:** 
+```batch
+cp scripts/run_variance_covariance.py .
+python run_variance_covariance.py -p 20 -vm Garch -id Empirical
+```
+
+**Common Arguments:**
+- `-p`, `--portfolio`: Portfolio size.
+- `-vm`, `--volatility_model`: (`Garch`, `Egarch`, `GJR`).
+- `-id`, `--innovation_distribution`: (`Normal`, `StudentsT`, `Empirical`, `GeneralizedError`).
+- `--alpha`: Confidence level (default: 0.01).
+- ...
+
+For all available options see:
+```bash
+python scripts/run_variance_covariance.py --help
+```
+
 #### 4.3.3 Multivariate Copula
 Uses multivariate copulas to model the dependence structure between assets. The copula is fitted with pseudo-observations and, once calibrated, is used to draw 100,000 uniformly distributed random samples that implicitly represent the dependence structure. These samples are extended by their antithetic variates to further reduce variance and re-transformed to the "original" margin scale. Finally, the VaR and ES are given by the alpha-quantile of the portfolio returns of the re-transformed univariate time-series.
+
+**Usage:** 
+```batch
+cp scripts/run_multivariate_copula.py .
+python run_multivariate_copula.py -p 20 -vm Garch -id Empirical -cp Student -md Empirical -fm itau --controls df=3 --save_req 250
+```
+
+**Common Arguments:**
+- `-p`, `--portfolio`: Portfolio size.
+- `-vm`, `--volatility_model`: (`Garch`, `Egarch`, `GJR`).
+- `-id`, `--innovation_distribution`: (`Normal`, `StudentsT`, `Empirical`, `GeneralizedError`).
+- `cp`, `--copula`: (`Gaussian`,`Student`,`Empirical`,`Clayton`,`Frank`,`Gumbel`)
+- `md`, `--margin_distribution`: (`Normal`, `StudentsT`, `Empirical`, `Pareto`)
+- `-fm`, `--fit_method`: (`itau`,`irho`,`ml`), high speed implementations for `itau`, `irho`.
+- `--controls`: Optional control parameters for fitting, sampling, re-transformation, etc.
+- `--save_freq`: Object stride, saves the fitted copula object to disk every `save_freq` windows.
+- ...
+
+For all available options see:
+```bash
+python scripts/run_multivariate_copula.py --help
+```
 
 #### 4.3.4 Vine Copula 
 The flagship model. It decomposes the $N$-dimensional multivariate distribution into $N(N-1)/2$ bivariate "pair-copulas".
@@ -231,20 +289,21 @@ Figure 5 shows an example of the vin structure in an arbitraray window. It conta
 
 **Figure 5**: First three trees of the vine in an arbitrary window for a six-dimensional portfolio.
 
-### 4.4 Running the Risk Forecasts
-To create a risk forecast, use the scripts in the `scripts/` folder. For a Vine Copula simulation:
-
-```bash
+**Usage:** 
+```batch
 cp scripts/run_vine_copula.py .
-python run_vine_copula.py -p 20 -vm Garch -id Empirical -md Empirical
+python run_vine_copula.py -p 20 -vm Garch -id Empirical -cf Student Gaussian Frank -md Empirical  -fm itau --controls trunc_lvl=10 --save_req 250
 ```
 
 **Common Arguments:**
 - `-p`, `--portfolio`: Portfolio size.
 - `-vm`, `--volatility_model`: (`Garch`, `Egarch`, `GJR`).
 - `-id`, `--innovation_distribution`: (`Normal`, `StudentsT`, `Empirical`, `GeneralizedError`).
-- `-md`, `--margin_distribution`: Margin distribution for copula transformation.
-- `--alpha`: Confidence level (default: 0.01).
+- `cf`, `--copula_families`: Restrict the set of bi-variate copula families that can be used within the tree.
+- `md`, `--margin_distribution`: (`Normal`, `StudentsT`, `Empirical`, `Pareto`).
+- `-fm`, `--fit_method`: (`itau`,`ml`).
+- `--controls`: Optional control parameters for fitting, sampling, re-transformation, etc.
+- `--save_freq`: Object stride, saves the fitted copula object to disk every `save_freq` windows.
 - ...
 
 For all available options see:
@@ -252,10 +311,14 @@ For all available options see:
 python scripts/run_vine_copula.py --help
 ```
 
+### 4.4 Running Simulations
+To create a risk forecast, use the scripts in the `scripts/` folder. 
+
 > [!TIP]
 > This will write VaR & ES forecasts and model summaries directly into the simulation folder once its completed. Temporary results are kept in a `temp/` directory.
 
 **Concurrent Implementation & Cloud Scalability**
+
 The risk forecasts (multivariate copula & vine copula) are calculated concurrently in `tools.Runner` using a `ProcessPoolExecutor`. This architecture is designed for massive, window-based computations.
 
 ![Runner](assets/runner_architecture.svg)
