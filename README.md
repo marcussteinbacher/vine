@@ -134,24 +134,19 @@ python run_volatility_forecasts.py -p 20 -vm Garch -id Empirical
 ```
 ... for all options see `python run_volatility_forecasts.py --help`.
 
-This will store batch-wise calculated risk forecasts and model summaries in `/temp`. These must be aggregated seperately with
-
-```batch
-cp scripts/build_volatility_data.py .
-python build_volatility_data.py
-```
+This will write temporary results in `/temp` and aggregate the forecasts into the simulation folder once its completed.
 
 > [!IMPORTANT] 
-> This will save the aggregated files, e.g. `volatility_forecasts.parquet`, into `data/20/Garch/Empirical/`. Make sure to create the folder(s) first!
+> This will save the aggregated files, e.g. `volatility_forecasts.parquet`, into the simulation folder, e.g. `data/20/Garch/Empirical/`. Make sure to create the folder(s) exist!
 
 ## 3. Adjusted Returns
 Standard risk models often assume that price returns are independent and identically distributed (i.i.d.). However, in reality, volatility varies over time. To use copula models effectively, we must first "de-volatize" the returns and then "re-volatize" them to the current regime.
 
-The one day-ahead VaR and ES forecasts are calculated in a rolling window manner based on **Adjusted Returns**. For each window $[t, T]$, the returns $r_t$ are adjusted to the forecast volatility $\sigma_T$ using the ratio:
+The one day-ahead VaR and ES forecasts are calculated in a rolling window manner based on **Adjusted Returns**. For each window $[t, T]$, the returns $r_t$ are adjusted to the current volatility regime using the ratio:
 
 ```math
 \tilde{r_t} = \frac{\sigma_T}{\sigma_t} \cdot r_t
-```
+``` 
 
 This transformation (found in `models/AdjustedReturn.py`) ensures that the historical data used for copula fitting is representative of the current market volatility environment.
 
@@ -165,7 +160,7 @@ volatilities = pd.read_parquet("data/20/Garch/Normal/volatility_forecasts.parque
 win_idcs, adj_return_wins = adjusted_return_windows(returns, volatilities)
 ```
 
-Figure 3 investigates the adjusted ($\tilde{r_t}$) and unscaled returns $r_t$ and the adjustment factor $\rho_t$ for an arbitrary window and asset.
+Figure 3 investigates the adjusted ($\tilde{r_t}$) and unscaled returns $r_t$ and the adjustment factor $\rho_t = \frac{\sigma_T}{\sigma_t}$ for an arbitrary window and asset.
 
 ![Adjusted Return](assets/adjusted_return_example.svg)
 

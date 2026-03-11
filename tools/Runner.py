@@ -166,7 +166,7 @@ class ObjectWriter(threading.Thread):
 
     def enqueue(self, window_id: int, obj):
         if self.stride == -1 or window_id % self.stride != 0:
-            return                              # not a stride boundary or -1 for no saving — drop
+            return                              # not a stride boundary or --save_freq = -1 (default) for no saving — drop
         self._queue.put((window_id, obj))
         if self._queue.qsize() >= self.flush_threshold:
             with self._cond:
