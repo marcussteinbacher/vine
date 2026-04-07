@@ -154,6 +154,8 @@ def simple_hits(actual:Union[pd.Series,NDArray],var:Union[pd.Series, NDArray])->
     """
     Returns a boolean Series of hits where the actual returns exceed the VaR.
     """
+    if isinstance(var, pd.DataFrame):
+        var = var.iloc[:,0]
     if isinstance(actual, pd.Series) and isinstance(var, pd.Series):
         index = actual.dropna().index.intersection(var.dropna().index)
         violations = actual.loc[index]<var.loc[index]
@@ -336,10 +338,17 @@ def mcneil_frey_test(actual_returns:Union[pd.Series,NDArray], es_forecasts:Union
 
         return p_value
 
+    if isinstance(es_forecasts, pd.DataFrame):
+        es_forecasts = es_forecasts.iloc[:,0]
+    if isinstance(var_forecasts, pd.DataFrame):
+        var_forecasts = var_forecasts.iloc[:,0]
+    
+    common_idx = actual_returns.dropna().index.intersection(es_forecasts.dropna().index)
+
     # Konvertiere die Eingaben in NumPy-Arrays für vektorisierte Operationen
-    actual = np.asarray(actual_returns)
-    es = np.asarray(es_forecasts)
-    var = np.asarray(var_forecasts)
+    actual = np.asarray(actual_returns.loc[common_idx])
+    es = np.asarray(es_forecasts.loc[common_idx])
+    var = np.asarray(var_forecasts.loc[common_idx])
 
     n = len(actual)
 

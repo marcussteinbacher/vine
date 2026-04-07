@@ -11,7 +11,6 @@ import numpy as np
 from tools.Kendall import kendall_tau_matrix_nb
 from tools.Transformations import empirical_ppf
 
-
 def _warmup_numba():
     """
     Force compilation of numba functions here. Once cached, every run uses the same.

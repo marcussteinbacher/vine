@@ -35,8 +35,40 @@ def get_family_counts(vc:pvc.Vinecop, how:Literal["tree","total"]="tree")->dict:
             for fam,count in tree.items():
                 total[fam] += count
 
-    return counts
+        return total
 
+
+def get_empirical_trunc_lvl(vine:pvc.Vinecop)->int:
+    """
+    Returns the empirical truncation level of the vine, i.e. the tree level from which onwards
+    there's only independent copulas.
+    """
+    emp_trunc = vine.trunc_lvl
+    family_counts = get_family_counts(vine)
+    for tree in list(family_counts.keys())[::-1]:
+        if "indep" in family_counts[tree]:
+            if len(family_counts[tree]) == 1:
+                emp_trunc = tree
+            else:
+                break
+    return emp_trunc
+
+def get_frequency_trunc_lvl(vine:pvc.Vinecop, thresh:float=0.9)->int:
+    """
+    Returns the empirical truncation level of the vine, i.e. the tree level for which the percentage of
+    independent copula exceeds thresh for the first time.
+    """
+    
+    emp_trunc = vine.trunc_lvl
+    family_counts = get_family_counts(vine)
+
+    # Get family percentage per tree
+    for lvl,d in family_counts.items():
+        for f,c in d.items():
+            family_counts[lvl][f] = c/(emp_trunc-lvl)
+            if f == "indep" and c/(emp_trunc-lvl) > thresh:
+                return lvl
+    return emp_trunc
 
 
 def build_family_set(families:list[str]):

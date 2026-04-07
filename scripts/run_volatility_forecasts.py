@@ -13,9 +13,11 @@ from tools.Helpers import StoreDict
 from tools.Runner import Runner
 import pickle as pkl
 import os
+from tqdm import tqdm
 from functools import partial
 import multiprocessing as mp
 from tools.Helpers import Parameters, save_vols, save_objects, save_params, _get_path
+from pathlib import Path
 
 # Force spawn
 mp.set_start_method("spawn", force=True)
@@ -50,6 +52,25 @@ def volatility_window(window, model):
     # Apply the volatility forecast column-wise to each window, this runs in a loop.
     # Must be module level, so can't sit in main().
     return np.apply_along_axis(model.volatility_forecast, axis=0, arr=window)
+
+def collect_result_objects(temp_dir:str="temp") -> dict:
+    """
+    Custom collection of results for `too big` Garch result objects. Extracts the v
+    volatility model name instead of loading the whole object.
+    
+    Returns
+    -------
+    dict mapping window_id -> obj.name for every stride-boundary window.
+    """
+    temp = Path(temp_dir)
+    result = {}
+    for path in tqdm(sorted(temp.glob("object_*.pkl")),desc="Collecting objects"):
+        window_id = int(path.stem.split("_")[1])
+        with open(path, "rb") as f:
+            obj = pkl.load(f)
+            result[window_id] = [archres.to_json() for archres in obj]
+            del obj
+    return result
 
 def main():
     # Set some default controls
@@ -183,10 +204,7 @@ def main():
     print("Collecting results...")
 
     scalars = runner.collect_scalars()
-    objects = runner.collect_objects()
-
-    if not args.keep:
-        runner.cleanup()
+    print("Scalars collected!")
 
     # Saving results
     path = _get_path(params)
@@ -196,6 +214,11 @@ def main():
     df_vol = pd.DataFrame(vol_matrix, index=index)
     df_vol.to_parquet(path+"volatility_forecasts.parquet")
     print(path+"volatility_forecasts.parquet written!")
+
+
+    #objects = runner.collect_objects()
+    objects = collect_result_objects()
+    print("Objects collected!")
 
     # Calculating model statistics - only save summary to save disk-space
     df_objects=pd.DataFrame.from_dict(objects, dtype=str, orient="index")
@@ -214,8 +237,9 @@ def main():
     print(path+"volatility_models_summary.json written!")
 
     save_params()
-    print(path+"params.json written!")
-    
+
+    if not args.keep:
+        runner.cleanup()
 
 if __name__ == "__main__":
     main()

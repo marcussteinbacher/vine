@@ -30,7 +30,7 @@ _defaults = dict(
     select_trunc_lvl=False,
     select_families=True, # select automatically if not given in family_set
     select_threshold=True, # automatically select threshold for thresholded vines
-    num_threads=os.environ["PVC_NUM_THREADS"] # Leave at 1 if using all cores
+    num_threads=os.environ["PVC_NUM_THREADS"] #1 # Leave at 1 if using all cores, this is set in simulations.__init__
     )
 
 
@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
 
     # Vine controls
-    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, select_threshold=True, num_threads=4. Example: --controls trunc_lvl=7 preselect_families=True. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, select_threshold=True, num_threads=1. Example: --controls trunc_lvl=7 preselect_families=True. Check pyvinecopulib.FitControlsVinecop for details.")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
