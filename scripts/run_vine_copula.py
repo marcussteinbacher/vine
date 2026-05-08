@@ -28,7 +28,8 @@ _defaults = dict(
     #trunc_lvl=7,
     preselect_families=True, # whether to exclude families based on symmetry of the data
     select_trunc_lvl=False,
-    select_families=True, # select automatically if not given in family_set
+    select_families=True,
+    allow_rotations=False,
     select_threshold=True, # automatically select threshold for thresholded vines
     num_threads=os.environ["PVC_NUM_THREADS"] #1 # Leave at 1 if using all cores, this is set in simulations.__init__
     )
@@ -50,7 +51,7 @@ def parse_args():
     parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
 
     # Vine controls
-    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, select_threshold=True, num_threads=1. Example: --controls trunc_lvl=7 preselect_families=True. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, allow_rotations=False, select_threshold=True, num_threads=1. Example: --controls trunc_lvl=7 preselect_families=True. Check pyvinecopulib.FitControlsVinecop for details.")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -63,6 +64,9 @@ def parse_args():
     # Save frequency
     parser.add_argument("--save_freq",type=int,required=False,default=-1,help="Save the vine copula object to disk every save_frequency windows. Default: -1, no saving.")
     parser.add_argument("--keep",action="store_true",required=False,help="Wether to keep the temporary files. Default: False.")
+
+    # Output folder
+    parser.add_argument("--folder",type=str,required=False,default=None,help="Optionally specify the output folder for the calculated risk forecasts. Default: None, use the default path based on the parameters. If specified, the path must exist. e.g 01, Gaussian, etc.")
 
     return parser.parse_args()
 
@@ -148,7 +152,7 @@ def main():
         data=windows,
         n_workers=args.max_workers,
         max_in_flight=args.max_workers * 8,
-        flush_threshold=16, # flush scalars every 16 completed windows
+        flush_threshold=32, # flush scalars every 16 (default) completed windows
         object_stride=args.save_freq,
         object_flush_threshold=4, # flush objects when 4 are enqueued
         temp_dir="temp"
@@ -160,6 +164,9 @@ def main():
     runner.run()
 
     end_time = time.perf_counter()
+
+    # Update params to include calculation time
+    params.calculation.runtime = end_time - start_time
 
     print(f"Calculation completed in {end_time-start_time:.2f} seconds!")
     logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")
@@ -173,6 +180,7 @@ def main():
 
     # Save aggregated data: VaR.parquet, ES.parquet, models.pkl, params.json
     path = _get_path(params)
+    path = path if not args.folder else path+args.folder+"/"
 
     index = fut_index[-len(scalars):]
     var_series = pd.Series([v[0][0] for v in scalars.values()],index=index) # (N,) 
@@ -184,9 +192,16 @@ def main():
     es_series.to_frame(name="es").to_parquet(path+"ES.parquet")
     print(path+"ES.parquet written!")
 
-    save_objects(objects)
+    if args.folder: 
+        save_objects(objects,folder=args.folder)
+    else:
+        save_objects(objects)
     
-    save_params()
+    # Save updated params.json to simulation folder
+    with open(path+"params.json","wt") as f:
+        json.dump(params.dict,f,indent=2)
+    
+    #save_params()
     
 
 if __name__ == "__main__":

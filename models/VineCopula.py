@@ -53,6 +53,7 @@ def get_empirical_trunc_lvl(vine:pvc.Vinecop)->int:
                 break
     return emp_trunc
 
+
 def get_frequency_trunc_lvl(vine:pvc.Vinecop, thresh:float=0.9)->int:
     """
     Returns the empirical truncation level of the vine, i.e. the tree level for which the percentage of
@@ -91,8 +92,7 @@ def build_family_set(families:list[str]):
         "BB7":pvc.BicopFamily.bb7,
         "BB8":pvc.BicopFamily.bb8,
         "Tawn":pvc.BicopFamily.tawn,
-        "TLL":pvc.BicopFamily.tll
-
+        "TLL":pvc.BicopFamily.tll,  
     }
     return [d[family] for family in families] if families else []
 
@@ -106,6 +106,26 @@ def get_controls(fit_controls:pvc.FitControlsVinecop)->dict:
         params[k] = getattr(fit_controls,k)
     params["family_set"] = [f.name for f in fit_controls.family_set]
     return params
+
+
+def get_structure_changes(dists:list[float],threshold=0.0):
+    """
+    Identify significant regime changes where we need to re-calculate the structure.
+    Returns a list of indices where the distance exceeds the threshold and 
+    the structur needs to be calculated.
+
+    **Arguments**
+    - dists: weighted jaccard distance between consecutive vine copulas
+    - threshold: the minimum distance required to identify a regime change
+
+    **Returns**
+    - change_points: list of indices where the structure needs to be re-calculated
+    """
+    change_points = [0] # Always evaluate the first structure
+    for i in range(1, len(dists)):
+        if dists[i] > threshold:
+            change_points.append(i)
+    return change_points
 
 
 class VineCopulaResult:

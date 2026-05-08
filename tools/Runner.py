@@ -35,9 +35,10 @@ DTYPE = np.float32
 # ---------------------------------------------------------------------------
 
 _calc_fn_global = None   # the calculation callable
+_pass_indexed_window_global = False
 
 
-def _worker_init(calc_fn):
+def _worker_init(calc_fn, pass_indexed_window: bool = False):
     """
     Runs once per worker process at startup (via ProcessPoolExecutor initializer).
     Stores calc_fn in a module-level global so it is available in every
@@ -45,6 +46,8 @@ def _worker_init(calc_fn):
     """
     global _calc_fn_global
     _calc_fn_global = calc_fn
+    global _pass_indexed_window_global
+    _pass_indexed_window_global = pass_indexed_window
 
 
 def _worker(window_id: int, data_path: str) -> tuple:
@@ -59,7 +62,10 @@ def _worker(window_id: int, data_path: str) -> tuple:
     """
     data   = np.load(data_path, mmap_mode="r")
     window = data[window_id].astype(DTYPE)
-    obj, scalar_a, scalar_b = _calc_fn_global(window)
+    if _calc_fn_global is None:
+        raise RuntimeError("Worker not initialized with calculation function.")
+    calc_input = (window_id, window) if _pass_indexed_window_global else window
+    obj, scalar_a, scalar_b = _calc_fn_global(calc_input)
     return (
         window_id,
         obj,
@@ -141,7 +147,7 @@ class ScalarWriter(threading.Thread):
         path = self.temp_dir / f"scalars_{self._flush_counter:06d}.npz"
         self._flush_counter += 1
         np.savez(path, **arrays)
-        logger.info("ScalarWriter flushed %d entries -> %s", len(pending), path.name)
+        #logger.info("ScalarWriter flushed %d entries -> %s", len(pending), path.name)
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +210,8 @@ class ObjectWriter(threading.Thread):
             with open(path, "wb") as f:
                 pickle.dump(obj, f)
 
-        if pending:
-            logger.info("ObjectWriter flushed %d object(s).", len(pending))
+        #if pending:
+        #    logger.info("ObjectWriter flushed %d object(s).", len(pending))
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +270,7 @@ class Runner:
         calculation_fn,
         data=None,
         data_path=None,
+        pass_indexed_window: bool = False,
         object_stride: int = 250,
         n_workers=None,
         max_in_flight=None,
@@ -277,6 +284,7 @@ class Runner:
             raise ValueError("Provide either `data` or `data_path`, not both.")
 
         self._calc_fn      = calculation_fn
+        self.pass_indexed_window = pass_indexed_window
         self.object_stride = object_stride
         self.n_workers     = n_workers or os.cpu_count() or 4
         self.max_in_flight = max_in_flight or self.n_workers * 8
@@ -291,9 +299,11 @@ class Runner:
             probe           = np.load(self._data_path, mmap_mode="r")
             self._data_len  = probe.shape[0]
         else:
+            if data is None:
+                raise ValueError("`data` cannot be None when `data_path` is not provided.")
             self._data_path = str(self.temp_dir / "input_data.npy")
             if not Path(self._data_path).exists():
-                logger.info("Saving input (%s, float32) to %s ...", data.shape, self._data_path)
+                logger.info("Saving input (%s, float32) to %s ...",data.shape, self._data_path)
                 np.save(self._data_path, data.astype(DTYPE))
             self._data_len = data.shape[0]
 
@@ -333,7 +343,7 @@ class Runner:
             with ProcessPoolExecutor(
                 max_workers=self.n_workers,
                 initializer=_worker_init,
-                initargs=(self._calc_fn,),
+                initargs=(self._calc_fn, self.pass_indexed_window),
             ) as pool:
                 with tqdm(total=self._data_len, initial=len(completed),
                           desc="Windows", unit="win", position=0) as pbar:

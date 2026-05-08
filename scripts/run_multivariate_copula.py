@@ -173,6 +173,9 @@ def main():
 
     end_time = time.perf_counter()
 
+    # Update params to include calculation time
+    params.calculation.runtime = end_time - start_time
+
     print(f"Calculation completed in {end_time-start_time:.2f} seconds!")
     logging.info(f"Calculation completed in {end_time-start_time:.2f} seconds!")
 

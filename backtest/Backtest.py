@@ -131,7 +131,7 @@ def duration_test(violations:Union[pd.Series,NDArray], conf_level:float=0.95) ->
     return answer
 
 
-def failure_rate(violations:pd.Series) -> dict:
+def failure_rate(violations:pd.Series) -> float:
     """
     Simple failure rate.
     Parameters:
@@ -145,22 +145,23 @@ def failure_rate(violations:pd.Series) -> dict:
         raise ValueError("Input must be list, array, series or dataframe.")
     TN = len(violations)
 
-    answer = {"failure rate": N / TN}
-    print(f"Failure rate of {round((N/TN)*100,2)}%")
-    return answer
+    #answer = {"failure rate": N / TN}
+    #print(f"Failure rate of {round((N/TN)*100,2)}%")
+    return N/TN
 
 
-def simple_hits(actual:Union[pd.Series,NDArray],var:Union[pd.Series, NDArray])->Union[pd.Series,NDArray]:
+def simple_hits(actual:Union[pd.Series,pd.DataFrame],var:Union[pd.Series, pd.DataFrame])->pd.Series:
     """
     Returns a boolean Series of hits where the actual returns exceed the VaR.
     """
+    if isinstance(actual, pd.DataFrame):
+        actual = actual.iloc[:,0]
     if isinstance(var, pd.DataFrame):
         var = var.iloc[:,0]
-    if isinstance(actual, pd.Series) and isinstance(var, pd.Series):
-        index = actual.dropna().index.intersection(var.dropna().index)
-        violations = actual.loc[index]<var.loc[index]
-    else:
-        violations = actual<var
+
+    index = actual.dropna().index.intersection(var.dropna().index)
+    violations = actual.loc[index]<var.loc[index]
+    
     return violations
 
 
@@ -265,7 +266,7 @@ def christofferson_test(violations:Union[pd.Series,NDArray], conf_level:float=0.
     }
 
 
-def mcneil_frey_test(actual_returns:Union[pd.Series,NDArray], es_forecasts:Union[pd.Series,NDArray], var_forecasts:Union[pd.Series,NDArray], alpha:float=0.01, conf_level:float=0.95, boot=False, n_boot:int=1000)->dict:
+def mcneil_frey_test(actual_returns:Union[pd.Series,pd.DataFrame], es_forecasts:Union[pd.Series,pd.DataFrame], var_forecasts:Union[pd.Series,pd.DataFrame], alpha:float=0.01, conf_level:float=0.95, boot=False, n_boot:int=1000)->dict:
     """
     Übersetzt die R-Implementierung (rugarch/ESTest, Alexios Ghalanos [aut, cre], Tobias Kley [ctb], Initial release 2020-07-14) des Expected Shortfall (ES) Backtests 
     von McNeil und Frey (2000) nach Python.
@@ -360,7 +361,9 @@ def mcneil_frey_test(actual_returns:Union[pd.Series,NDArray], es_forecasts:Union
     violations_idx = actual < var
 
     # Der 'Excess Shortfall' (z) ist die Differenz zwischen der ES-Prognose und der tatsächlichen Rendite an den Tagen, an denen ein Verstoß auftrat.
-    z = es[violations_idx] - actual[violations_idx]
+    # Wir rechnen mit return Quantilen, also sollten die Werte negativ sein. Daher ist es korrekt, actual - es zu berechnen, um die Überschreitung zu erhalten.
+    #z = es[violations_idx] - actual[violations_idx]
+    z = actual[violations_idx] - es[violations_idx]
     num_violations = len(z)
 
     p_value = _calculate_p_value(z)
@@ -399,10 +402,48 @@ def mcneil_frey_test(actual_returns:Union[pd.Series,NDArray], es_forecasts:Union
         'expected_exceed': int(np.floor(alpha * n)),
         'actual_exceed': num_violations,
         "H0": "Der Mittelwert der Überschreitungen des VaR ist gleich null",
-        'H1': "Der Mittelwert der Überschreitungen des VaR ist größer als null (ES wird systematisch unterschätzt)",
+        'H1': "Der Mittelwert der Überschreitungen des VaR wird systematisch unterschätzt",
         'boot_p_value': boot_p_value,
         'p_value': p_value,
         'Decision': decision
     }
 
     return results
+
+
+def es_backtest_boot(actual_returns:Union[pd.Series,pd.DataFrame], es_forecasts:Union[pd.Series,pd.DataFrame], var_forecasts:Union[pd.Series,pd.DataFrame],alpha=0.01,conf_level=0.95):
+    """
+    Alternative implementation of the bootsrap backtest by McNeil & Frey (2000) with an
+    empirical and analytical p-value.
+    """
+    if isinstance(actual_returns, pd.DataFrame):
+        actual_returns = actual_returns.iloc[:,0]
+    if isinstance(es_forecasts, pd.DataFrame):
+        es_forecasts = es_forecasts.iloc[:,0]
+    if isinstance(var_forecasts,pd.DataFrame):
+        var_forecasts = var_forecasts.iloc[:,0]
+
+    violations = simple_hits(actual_returns, var_forecasts)
+    idx = violations[violations].index
+    
+    # Da es sich um Return Quantile handelt, sollten die Werte negativ sein. Daher ist es korrekt, actual - es zu berechnen, um die Überschreitung zu erhalten.
+    #excess_shortfalls = es_forecasts.loc[idx] - actual_returns.loc[idx]
+    excess_shortfalls = actual_returns.loc[idx] - es_forecasts.loc[idx]
+
+    boot = stats.bootstrap((excess_shortfalls,), np.mean, alternative="greater", confidence_level=conf_level)
+
+    # Empirical p_value
+    p_value_emp = np.sum(boot.bootstrap_distribution < 0) / len(boot.bootstrap_distribution)
+
+    # Analytical p_value
+    # Assumtion: bootstrap distribution approx. normally distributed (CLT)
+    mean = np.mean(boot.bootstrap_distribution)
+    std = np.std(boot.bootstrap_distribution,ddof=1)
+    p_value_an = stats.norm.cdf(0, loc=mean, scale=std)
+
+    return {
+        "expected_exceeded": int(alpha*len(violations)),
+        "actual_exceeded": len(idx),
+        "p_value_empirical": p_value_emp,
+        "p_value_analytical": p_value_an
+    }

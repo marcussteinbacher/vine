@@ -84,7 +84,7 @@ def main():
     del returns, volatilities
 
     print(f"Calculating {_SIM} VaR & ES...")
-    start = time.perf_counter()
+    start_time = time.perf_counter()
 
     # -----------------
     # START CALCULATION
@@ -92,12 +92,15 @@ def main():
 
     results = list(tqdm(map(partial(simulate_varcov,alpha=args.alpha),adj_r_windows), total=len(adj_r_windows)))
     
-    stop = time.perf_counter()
+    end_time = time.perf_counter()
+
+    # Update params to include calculation time
+    params.calculation.runtime = end_time - start_time
    
     print("Done!")
-    print(f"Calulation finished in {stop - start:.2f} seconds.")
+    print(f"Calulation finished in {end_time - start_time:.2f} seconds.")
 
-    logging.info(f"Calulation finished in {stop-start:.2f} seconds.")
+    logging.info(f"Calulation finished in {end_time-start_time:.2f} seconds.")
 
     var, es = zip(*results)
 

@@ -17,8 +17,27 @@ class Parameters:
         self.dict = d
         for k,v in d.items():
             setattr(self,k,v)
-            if isinstance(v,dict):
-                setattr(self,k,Parameters(v))
+
+    def __setattr__(self, key, value):
+        if key == "dict":
+            object.__setattr__(self, key, value)
+            return
+
+        if isinstance(value, Parameters):
+            attr_value = value
+            dict_value = value.dict
+        elif isinstance(value, dict):
+            attr_value = Parameters(value)
+            dict_value = attr_value.dict
+        else:
+            attr_value = value
+            dict_value = value
+
+        object.__setattr__(self, key, attr_value)
+
+        d = self.__dict__.get("dict")
+        if isinstance(d, dict):
+            d[key] = dict_value
 
     def __repr__(self):
         return json.dumps(self.dict, indent=2)
@@ -106,13 +125,14 @@ def save_scalars(data:dict, index:pd.Index|None=None,temp_dir:str="temp") -> Non
     print(path+"ES.parquet written!")
 
 
-def save_objects(data:dict,temp_dir:str="temp") -> None:
+def save_objects(data:dict,temp_dir:str="temp",folder:str="") -> None:
     """
     Takes the collection {window_id: obj, ...} from Runner().collect_objects() and
     saves them into the simulation folder as of temp/params.json.
     """
     params = Parameters.from_json(f"{temp_dir}/params.json")
     path = _get_path(params)
+    path = path if not folder else path+folder+"/"
 
     with open(path+"models.pkl","wb") as f:
         pkl.dump(data, f)

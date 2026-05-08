@@ -10,10 +10,7 @@ Usage:
 import argparse
 import logging
 import os
-import tempfile
 from functools import partial
-from pathlib import Path
-from tools.Helpers import save_scalars, save_objects, save_params
 from tools.Runner import Runner
 from simulations.GaussianCopula import fit_gaussian_copula
 
@@ -37,7 +34,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = parse_args()
 
-    # Build the callable — plain function or partial if args are needed.
+    # Build the callable — plain function or partial if args are needed. Needs to be module level.
     # Both are picklable since fit_gaussian_copula is a module-level function.
     if args.verbose:
         calc_fn = partial(fit_gaussian_copula, verbose=True)
@@ -48,7 +45,6 @@ def main():
     runner = Runner(
         calculation_fn=calc_fn,
         data_path=args.data_path,
-        chunk_size=args.chunk_size,
         object_stride=args.object_stride,
         n_workers=args.n_workers,
         temp_dir="temp",
