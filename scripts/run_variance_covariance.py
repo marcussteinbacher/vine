@@ -27,6 +27,8 @@ def parse_args():
 
     #parser.add_argument("-r", "--risk_metric",type=str,choices=config.RISKMETRICS,required=True,help="Choose the one-day ahead risk metric to be calculated.")
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
+    parser.add_argument("-d","--dist",required=False,choices=["Normal","Student"],type=str,default="Normal",help="Choose the distribution for the PPF used in VaR/ES: 'Normal' or 'Student'.")
+    parser.add_argument("--nu",required=False,type=float,default=3.0,help="Degrees of freedom for Student-t (only used if --dist Student). Default 3.")
     #parser.add_argument("--parallel",action="store_true",help="Wether to run the calculation concurrently or serial. Default: False. Info: Serial, due to less overhead, is faster for small portfolios.")
 
     return parser.parse_args()
@@ -44,6 +46,8 @@ def main():
             "simulation": {
                 "name":_SIM,
                 "alpha":args.alpha,
+                "distribution": args.dist,
+                "nu": args.nu,
                 "risk_metric":[
                     "VaR",
                     "ES"
@@ -56,7 +60,7 @@ def main():
     params = Parameters(_params)
 
     # Constructing simulation path
-    path_s = f"data/{params.portfolio}/{params.volatility.volatility_model}/{params.volatility.innovation_distribution}/{params.simulation.name}/"
+    path_s = f"data/{params.portfolio}/{params.volatility.volatility_model}/{params.volatility.innovation_distribution}/{params.simulation.name}/{params.simulation.distribution}/"
 
 
     print(f"Starting {_SIM} VaR & ES with parameters:")
@@ -90,7 +94,7 @@ def main():
     # START CALCULATION
     # -----------------
 
-    results = list(tqdm(map(partial(simulate_varcov,alpha=args.alpha),adj_r_windows), total=len(adj_r_windows)))
+    results = list(tqdm(map(partial(simulate_varcov,alpha=args.alpha,distribution=args.dist,nu=args.nu),adj_r_windows), total=len(adj_r_windows)))
     
     end_time = time.perf_counter()
 

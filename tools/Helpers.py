@@ -205,7 +205,10 @@ class StoreDict(argparse.Action):
             try:
                 return int(value)
             except ValueError:
-                return value  # fallback to string
+                try:
+                    return float(value)
+                except ValueError:
+                    return value  # fallback to string
     
     def __call__(self, parser, namespace, values:dict, option_string=None):
         d = getattr(namespace, self.dest)
