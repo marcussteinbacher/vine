@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns 
 from typing import Literal
 import json
+import networkx as nx
+from tools.Graphs import get_node_labels, get_edge_labels, make_graph_network
 
 class Theme:
     """
@@ -124,3 +126,34 @@ def default_color_generator():
         yield colors[i%len(colors)]
         i+=1
     
+
+def plot_vine(vine, trees:list[int],ax, layout="graphviz"):
+    """
+    Plots the specified trees of a vine. 
+    Arguments:
+    - vine: Vine object
+    - trees: List of tree indices to plot, e.g. [0,1,2]
+    - ax: Matplotlib axis to plot on
+    - layout: Layout for the graph, default "graphviz". See networkx.draw_networkx for more options.
+    """
+
+    G = make_graph_network(vine, trees)
+    node_labels = get_node_labels(G)
+    edge_labels = get_edge_labels(G)
+
+    match layout:
+        case "graphviz":
+            pos = nx.drawing.nx_pydot.graphviz_layout(G, prog="dot") # dot, twopi, fdp, sfdp, circo
+        case "spring_layout":
+            pos = nx.spring_layout(G)
+        case _ as e:
+            raise NotImplementedError(f"Layout {e} not implemented!")
+        
+    for node, data in G.nodes(data=True):
+        tree = G.nodes[node]["tree"]
+        shape = "s" if tree == 0 else "o"
+        nx.draw_networkx_nodes(G,pos,nodelist=[node],node_shape=shape,ax=ax,node_size=750)
+
+    nx.draw_networkx_labels(G,pos,labels=node_labels,ax=ax)
+    nx.draw_networkx_edges(G,pos,ax=ax)
+    nx.draw_networkx_edge_labels(G,pos,edge_labels=edge_labels,ax=ax,bbox=dict(boxstyle="round", fc="0.8", ec="0.5", alpha=0.75))

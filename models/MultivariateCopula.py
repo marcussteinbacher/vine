@@ -2,8 +2,8 @@ import numpy as np
 from copulae.elliptical.abstract import BaseCopula
 import json
 import copulae as cp
-from tools.Kendall import kendall_tau_matrix, kendall_tau_matrix_nb
-from tools.Spearman import spearman_rho_matrix
+from stats.Kendall import kendall_tau_matrix, kendall_tau_matrix_nb
+from stats.Spearman import spearman_rho_matrix
 from tools.Matrices import make_positive_semidefinite
 import scipy.stats as stats
 from copulae.stats import multivariate_t as mvt, t

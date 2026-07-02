@@ -8,7 +8,7 @@ from config import set_env
 set_env(n_threads=1)
 
 import numpy as np
-from tools.Kendall import kendall_tau_matrix_nb
+from stats.Kendall import kendall_tau_matrix_nb
 from tools.Transformations import empirical_ppf
 
 def _warmup_numba():
