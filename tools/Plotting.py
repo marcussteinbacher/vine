@@ -15,12 +15,11 @@ class Theme:
     - 'solarized_light': Matches the corresponding VS Code theme 
 
     Example:
+    ```python
     from tools.Plotting import Theme
-
     Theme.set_theme('solarized_light')
-
     plt.plot(...)
-
+    ```
     """
     solarized_dark = rc={"axes.edgecolor": '#B7B7B7',
                         "axes.facecolor": "#00212B",
@@ -111,13 +110,14 @@ def default_color_generator():
     Endlessly cycles through the default colors. See plt.rcParams['axes.prop_cycle'].
     
     Example:
-    
+    ```python
     gen = default_color_generator() \n
     fig, ax = plt.subplots() \n
     [...] \n
     for i in range(10): \n
         ax.plot(..., color = next(gen)) \n
     [...]
+    ```
     """
     i = 0
     while True:
@@ -127,14 +127,15 @@ def default_color_generator():
         i+=1
     
 
-def plot_vine(vine, trees:list[int],ax, layout="graphviz"):
+def plot_vine(vine, trees:list[int],ax, layout="graphviz",edge_labels=True):
     """
     Plots the specified trees of a vine. 
     Arguments:
     - vine: Vine object
     - trees: List of tree indices to plot, e.g. [0,1,2]
     - ax: Matplotlib axis to plot on
-    - layout: Layout for the graph, default "graphviz". See networkx.draw_networkx for more options.
+    - layout: Layout for the graph, default "graphviz". Options: "graphviz" or "spring_layout". See networkx.draw_networkx for more information.
+    - edge_labels: Whether to display edge labels w/ copula info, default True.
     """
 
     G = make_graph_network(vine, trees)
@@ -156,4 +157,5 @@ def plot_vine(vine, trees:list[int],ax, layout="graphviz"):
 
     nx.draw_networkx_labels(G,pos,labels=node_labels,ax=ax)
     nx.draw_networkx_edges(G,pos,ax=ax)
-    nx.draw_networkx_edge_labels(G,pos,edge_labels=edge_labels,ax=ax,bbox=dict(boxstyle="round", fc="0.8", ec="0.5", alpha=0.75))
+    if edge_labels:
+        nx.draw_networkx_edge_labels(G,pos,edge_labels=edge_labels,ax=ax,bbox=dict(boxstyle="round", fc="0.8", ec="0.5", alpha=0.75))

@@ -93,8 +93,8 @@ def simulate_vc_tailtau(
     margin_dist:str,
     n_samples:int=100_000,
     alpha:float=0.01,
-    tau_threshold=0.2,
-    tau_tails="both", # lower, upper, both
+    tau_threshold=0.25,
+    tau_tails="lower", # lower, upper, both
     **kwargs
     )->tuple[VineCopulaResult, float, float]:
 
@@ -106,9 +106,12 @@ def simulate_vc_tailtau(
 
     # Run the custom tail-rank focused vine builder
     bi_controls = extract_controlsbicop(controls)
-    trunc_lvl = controls.trunc_lvl
-    
-    custom_vine = fit_custom_tail_vine(u,bi_controls, trunc_lvl ,threshold=tau_threshold, tail=tau_tails)
+    try:
+        trunc_lvl = controls.trunc_lvl
+    except AttributeError:
+        trunc_lvl = window.shape[1] - 1  # Default to full depth if not specified
+
+    custom_vine, tailtaus = fit_custom_tail_vine(u,bi_controls, trunc_lvl ,threshold=tau_threshold, tail=tau_tails)
     custom_trees = get_custom_trees(custom_vine)
     rvine_matrix, native_pair_copulas = translate_custom_vine(custom_trees)
 

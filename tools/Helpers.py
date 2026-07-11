@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pickle as pkl
 import subprocess
+import pyvinecopulib as pvc
 
 
 class Parameters:
@@ -216,3 +217,103 @@ class StoreDict(argparse.Action):
             k, v = item.split('=', 1)
             d[k] = self.parse_value(v)
         setattr(namespace, self.dest, d)
+ 
+ 
+def _decode_edge(matrix: np.ndarray, d: int, t: int, e: int) -> tuple:
+    """
+    Decode the conditioned pair and conditioning set for edge e in tree t.
+ 
+    Parameters
+    ----------
+    matrix : np.ndarray, shape (d, d)
+        Structure matrix from vine.structure.matrix (1-indexed labels).
+    d : int
+        Dimension of the vine.
+    t : int
+        Tree level, 0-indexed (Tree 1 = t=0, Tree 2 = t=1, ...).
+    e : int
+        Edge index within the tree, 0-indexed.
+ 
+    Returns
+    -------
+    conditioned : frozenset of two ints (1-indexed variable labels)
+    conditioning : frozenset of ints (1-indexed variable labels)
+    """
+    var1 = int(matrix[d - 1 - e, e])   # counter-diagonal element of column e
+    var2 = int(matrix[t, e])            # element at row t of column e
+    conditioning = frozenset(int(matrix[k, e]) for k in range(0, t))
+    return frozenset({var1, var2}), conditioning
+ 
+ 
+def get_pair_copula(
+    vine: pvc.Vinecop,
+    conditioned: tuple[int, int],
+    conditioning: tuple[int, ...] = (),
+    re_index: bool = True
+) -> pvc.Bicop:
+    """
+    Extract a pair copula from a fitted Vinecop by its conditioned and
+    conditioning variable sets (1-indexed, matching pyvinecopulib convention).
+ 
+    Parameters
+    ----------
+    vine : pv.Vinecop
+        A fitted vine copula object.
+    conditioned : tuple of two ints
+        The conditioned variable pair, e.g. (2, 5). Order does not matter.
+        Variables are 1-indexed.
+    conditioning : tuple of ints, optional
+        The conditioning set, e.g. (1, 3). Order does not matter.
+        Empty tuple for Tree 1 edges (default).
+    re_index : bool, optional
+        If True, re-index the pair copula to account for pyvinecopulibs indexing starting at 1.
+ 
+    Returns
+    -------
+    tuple of (int, int, pvc.Bicop)
+        The tree index, edge index, and the pair copula object.
+ 
+    Raises
+    ------
+    ValueError
+        If no matching edge is found. Call print_vine_edges(vine) to inspect
+        all available edges.
+ 
+    Examples
+    --------
+    # Tree 1 edge between variables 2 and 5:
+    bc = get_pair_copula(vine, conditioned=(2, 5))
+ 
+    # Tree 2 edge between variables 1 and 4, conditioned on variable 3:
+    bc = get_pair_copula(vine, conditioned=(1, 4), conditioning=(3,))
+ 
+    # Tree 3 edge between variables 2 and 6, conditioned on {1, 3}:
+    bc = get_pair_copula(vine, conditioned=(2, 6), conditioning=(1, 3))
+    """
+    if re_index:
+        # Re-index to match pyvinecopulib's 1-indexing convention
+        conditioned = tuple(i + 1 for i in conditioned)
+        conditioning = tuple(i + 1 for i in conditioning)
+
+    target_conditioned  = frozenset(conditioned)
+    target_conditioning = frozenset(conditioning)
+ 
+    struct = vine.structure
+    d      = struct.dim          # correct attribute: .dim, not .d
+    matrix = struct.matrix       # d x d array, 1-indexed variable labels
+    pair_copulas = vine.pair_copulas  # nested list [tree][edge]
+ 
+    # tree t is 0-indexed (t=0 → Tree 1), edge e is 0-indexed within the tree.
+    # At tree t there are d-1-t edges: e = 0, 1, ..., d-2-t.
+    for t in range(d - 1):
+        for e in range(d - 1 - t):
+            edge_conditioned, edge_conditioning = _decode_edge(matrix, d, t, e)
+            if (edge_conditioned  == target_conditioned and
+                    edge_conditioning == target_conditioning):
+                return t,e, pair_copulas[t][e]
+ 
+    raise ValueError(
+        f"No edge found with conditioned={set(conditioned)} and "
+        f"conditioning={set(conditioning)}.\n"
+        f"Call print_vine_edges(vine) to see all available edges."
+    )

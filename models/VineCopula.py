@@ -156,7 +156,7 @@ class VineCopulaResult:
 # Tail-thresholded Kendall's tau and related functions for building a custom vine structure.
 # -----------------------
 
-def threshold_kendalls_tau(u, v, threshold=0.2, tail='lower'):
+def threshold_kendalls_tau(u, v, threshold=0.25, tail='lower'):
     """
     Computes Kendall's tau restricted strictly to specified tail quantiles
     of the pseudo-observations.
@@ -173,8 +173,8 @@ def threshold_kendalls_tau(u, v, threshold=0.2, tail='lower'):
         raise ValueError("Tail must be 'lower','upper', or 'both'.")
         
     if np.sum(mask) < 10:  # Stability safeguard for extreme thresholds, less than 10 pairs of extreme events
-        #return 0.0
-        tau, _ = kendalltau(u, v)  # Fall back to standard global tau if tail is too sparse 
+        return 0.0
+        #tau, _ = kendalltau(u, v)  # Fall back to standard global tau if tail is too sparse 
     else:
         tau, _ = kendalltau(u[mask], v[mask])
     return np.nan_to_num(tau)
@@ -194,25 +194,55 @@ class VineTreeEdge:
         self.all_vars = self.conditioned | self.conditioning
 
 
-def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, threshold=0.15, tail='lower'):
+def compute_tail_tau_matrix(data, threshold=0.25, tail='lower'):
+    d = data.shape[1]
+    matrix = np.ones((d, d))
+    for i, j in combinations(range(d), 2):
+        tau = threshold_kendalls_tau(data[:, i], data[:, j], threshold=threshold, tail=tail)
+        matrix[i, j] = matrix[j, i] = np.abs(tau)
+    return matrix
+
+
+def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, threshold=0.25, tail='lower'):
+    """
+    Fit a custom vine structure using the tail-thresholded Kendall's tau.
+    """
     n, d = u_data.shape
+
+    tail_tau_matrix = compute_tail_tau_matrix(u_data, threshold=threshold, tail=tail)
     
     # Store all fitted edges grouped by tree level
     vines_by_tree = {}
+
+    # Store all tail-weighted taus by tree level for post-hoc analysis
+    taus_by_tree = {}
     
     # --- TREE 1 -----------------------------------------------------------
     
     G1 = nx.Graph()
     for i in range(d):
         for j in range(i + 1, d):
-            tau_u = threshold_kendalls_tau(u_data[:, i], u_data[:, j], threshold, tail)
-            G1.add_edge(i, j, weight=np.abs(tau_u))
+            #tau_u = threshold_kendalls_tau(u_data[:, i], u_data[:, j], threshold, tail)
+
+            tau_u = tail_tau_matrix[i, j]  # Use precomputed matrix for efficiency
             
-    mst1 = nx.maximum_spanning_tree(G1, weight='weight')
+            # DEBUG: Print the exact weights the MST is about to evaluate
+            #if (i == 4 and j == 5) or (i == 4 and j == 8) or (i == 5 and j == 8):
+            #    print(f"Internal weight for ({i}, {j}): {np.abs(tau_u)}")
+
+            G1.add_edge(i, j, weight=np.abs(tau_u),tailtau=tau_u)
+            
+    mst1 = nx.maximum_spanning_tree(G1, weight='weight',algorithm="prim")
     
     current_layer_edges = []
-    for u, v in mst1.edges():
+    current_layer_tailtaus = []
+
+    for u, v, attr in mst1.edges(data=True):
         pair_data = u_data[:, [u, v]]
+
+        tailtau = attr["tailtau"]
+        current_layer_tailtaus.append(tailtau)
+
         bicop = pvc.Bicop()
         bicop.select(pair_data, controls)
         
@@ -230,7 +260,8 @@ def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, thres
         current_layer_edges.append(edge_obj)
         
     vines_by_tree[1] = current_layer_edges
-    
+    taus_by_tree[1] = current_layer_tailtaus
+
     # --- TREES 2 to d-1 ---------------------------------------------------
     for tree_idx in range(2, d):
         
@@ -259,22 +290,25 @@ def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, thres
                     
                     # Cache structural properties in the edge attributes
                     G_curr.add_edge(i, j, weight=np.abs(tau_u), 
-                                    var_A=var_A, var_B=var_B, common_vars=common_vars)
+                                    var_A=var_A, var_B=var_B, common_vars=common_vars, tailtau=tau_u)
                     
         if len(G_curr.edges()) == 0:
             print(f"No valid proximity-conditioned edges available. Truncating at Tree {tree_idx-1}.")
             break
             
         # Step B: Maximum Spanning Tree Optimization
-        mst_curr = nx.maximum_spanning_tree(G_curr, weight='weight')
+        mst_curr = nx.maximum_spanning_tree(G_curr, weight='weight', algorithm="prim")
         
         next_layer_edges = []
+        next_layer_tailtaus = []
+
         for idx_A, idx_B, attr in mst_curr.edges(data=True):
             edge_A = current_layer_edges[idx_A]
             edge_B = current_layer_edges[idx_B]
             
             var_A, var_B = attr['var_A'], attr['var_B']
             common_vars = attr['common_vars']
+            next_layer_tailtaus.append(attr['tailtau'])
 
             #print(edge_A.h_dict.keys(), var_A, var_B)
 
@@ -318,9 +352,10 @@ def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, thres
             next_layer_edges.append(new_edge)
             
         vines_by_tree[tree_idx] = next_layer_edges
+        taus_by_tree[tree_idx] = next_layer_tailtaus
         current_layer_edges = next_layer_edges
 
-    return vines_by_tree
+    return vines_by_tree, taus_by_tree
 
 
 class CustomVineEdge:

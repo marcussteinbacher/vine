@@ -2,6 +2,7 @@ import networkx as nx
 from typing import Any, Optional
 from numpy.typing import NDArray
 import numpy as np
+from pyvis.network import Network
 
 
 def get_name(vc:Any, tree:int, edge:int, vars_names:list[str]):
@@ -159,3 +160,48 @@ def get_edge_labels(G:nx.Graph):
     Returns a dictionary with edge labels.
     """
     return {edge: G.edges[edge]["label"] for edge in G.edges}
+
+
+def make_network_html(graph:nx.Graph, filename:str="network.html"):
+    """
+    Creates an interactive HTML in te folder 'export' visualization of a networkx graph using pyvis.
+
+    :param graph: A networkx graph object.
+    :param filename: The name of the output HTML file.
+
+    Example usage:
+    ```python
+    ...
+    vine = pvc.Vinecop.from_data(...)
+    graph = make_graph_network(vine)
+    make_network_html(graph, filename="vine_structure.html")
+    ```
+    """
+    options = {
+      "layout": {
+        "hierarchical": {
+          #"enabled": False,
+          "direction": "LR",  # LR, RL, UD, DU
+        },
+      }
+    }
+
+    for node in graph.nodes:
+        graph.nodes[node]["fixed"] = True
+
+    net = Network(#height="100%", #"480px",
+                  width="100%",
+                  neighborhood_highlight=False,
+                  filter_menu=False,
+                  #select_menu=True,
+                  cdn_resources="in_line", #'local', #"remote"
+                  #bgcolor= "#3F3F3F",
+                  #heading = "R-Vine Copula Structure in window {win_n}",
+                  )
+
+    net.from_nx(graph, default_node_size=20)
+
+    net.options = options
+    if not filename.endswith(".html"):
+        filename += ".html"
+    net.save_graph(f'export/{filename}')
