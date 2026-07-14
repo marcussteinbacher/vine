@@ -133,3 +133,41 @@ def simulate_vc_tailtau(
     del retrans
 
     return VineCopulaResult(vine), var, es
+
+
+def simulate_vc_indep(
+    window:np.ndarray,
+    margin_dist:str,
+    n_samples:int=100_000,
+    alpha:float=0.01,
+    **kwargs
+    )->tuple[VineCopulaResult, float, float]:
+
+    rnd_kwargs = {k:v for k,v in kwargs.items() if k in _RND_KWARGS}
+    risk_kwargs = {k:v for k,v in kwargs.items() if k in _RISK_KWARGS}
+    margin_kwargs = {k:v for k,v in kwargs.items() if k in _MARGIN_KWARGS}
+
+    u = pvc.to_pseudo_obs(window)
+
+    # The structure is irrelevant for indep-only vine copulas.
+    d = window.shape[1]
+    structure = pvc.RVineStructure.from_dimension(d)
+    pair_copulas = [
+        [pvc.Bicop(pvc.indep) for _ in range(d - 1 - t)] 
+        for t in range(d - 1)
+    ]
+    vine = pvc.Vinecop.from_structure(structure=structure, pair_copulas=pair_copulas)
+
+    del u 
+
+    sample = antithetic_variates(np.asarray(vine.simulate(n_samples, **rnd_kwargs)), method="1-u")
+    retrans, margin_params = ppf_transform(sample, window, distribution=margin_dist, **margin_kwargs)
+
+    del sample, margin_params
+
+    var = value_at_risk(retrans, alpha=alpha, **risk_kwargs)
+    es = expected_shortfall(retrans, alpha=alpha,**risk_kwargs)
+
+    del retrans
+
+    return VineCopulaResult(vine), var, es

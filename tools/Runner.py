@@ -302,9 +302,19 @@ class Runner:
             if data is None:
                 raise ValueError("`data` cannot be None when `data_path` is not provided.")
             self._data_path = str(self.temp_dir / "input_data.npy")
-            if not Path(self._data_path).exists():
-                logger.info("Saving input (%s, float32) to %s ...",data.shape, self._data_path)
-                np.save(self._data_path, data.astype(DTYPE))
+            if Path(self._data_path).exists():
+                try:
+                    existing = np.load(self._data_path, mmap_mode="r")
+                    if existing.shape != data.shape:
+                        for pattern in ("scalars_*.npz", "object_*.pkl", "input_data.npy"):
+                            for p in self.temp_dir.glob(pattern):
+                                p.unlink(missing_ok=True)
+                except Exception:
+                    for pattern in ("scalars_*.npz", "object_*.pkl", "input_data.npy"):
+                        for p in self.temp_dir.glob(pattern):
+                            p.unlink(missing_ok=True)
+            logger.info("Saving input (%s, float32) to %s ...", data.shape, self._data_path)
+            np.save(self._data_path, data.astype(DTYPE))
             self._data_len = data.shape[0]
 
         _threshold = flush_threshold or self.n_workers * 4

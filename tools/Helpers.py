@@ -7,6 +7,7 @@ import pandas as pd
 import pickle as pkl
 import subprocess
 import pyvinecopulib as pvc
+from stats.Jaccard import VineStructureSnapshot
 
 
 class Parameters:
@@ -317,3 +318,12 @@ def get_pair_copula(
         f"conditioning={set(conditioning)}.\n"
         f"Call print_vine_edges(vine) to see all available edges."
     )
+
+
+def get_common_edges(vine0:pvc.Vinecop, vine1:pvc.Vinecop, tree:int):
+    """
+    Extract the common edges between two vine copulas at a specific tree level.
+    """
+    edges0 = VineStructureSnapshot.from_vinecop(vine0).get_edges()[tree]
+    edges1 = VineStructureSnapshot.from_vinecop(vine1).get_edges()[tree]
+    return edges0 & edges1
