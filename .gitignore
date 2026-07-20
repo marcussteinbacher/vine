@@ -5,6 +5,7 @@
 **/.ipynb_checkpoints/
 test.py
 run_*.py
+!scripts/run*.py
 
 __pycache__
 _marimo
