@@ -11,6 +11,7 @@ _marimo
 .ipynb_checkpoints
 .vscode
 .archive
+data_old
 data/*
 !data/.gitkeep
 export

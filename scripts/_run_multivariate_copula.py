@@ -160,6 +160,7 @@ def main():
         data=windows,
         n_workers=args.max_workers,
         max_in_flight=args.max_workers * 8,
+        window_offset=args.start_idx,
         flush_threshold=16, # flush scalars every 16 completed windows
         object_stride=args.save_freq,
         object_flush_threshold=4, # flush objects when 4 are enqueued

@@ -50,7 +50,7 @@ def _worker_init(calc_fn, pass_indexed_window: bool = False):
     _pass_indexed_window_global = pass_indexed_window
 
 
-def _worker(window_id: int, data_path: str) -> tuple:
+def _worker(window_pos: int, window_id: int, data_path: str) -> tuple:
     """
     Process a single window.
     Loads the array via mmap, slices window_id, applies _calc_fn_global.
@@ -61,7 +61,7 @@ def _worker(window_id: int, data_path: str) -> tuple:
       - vector return  (np.ndarray)         -> shape (n,)  unchanged
     """
     data   = np.load(data_path, mmap_mode="r")
-    window = data[window_id].astype(DTYPE)
+    window = data[window_pos].astype(DTYPE)
     if _calc_fn_global is None:
         raise RuntimeError("Worker not initialized with calculation function.")
     calc_input = (window_id, window) if _pass_indexed_window_global else window
@@ -97,7 +97,13 @@ class ScalarWriter(threading.Thread):
         self._queue          = queue.Queue()
         self._stop_event     = threading.Event()
         self._cond           = threading.Condition()
-        self._flush_counter  = 0
+        existing = []
+        for path in self.temp_dir.glob("scalars_*.npz"):
+            try:
+                existing.append(int(path.stem.split("_")[1]))
+            except (IndexError, ValueError):
+                continue
+        self._flush_counter  = max(existing) + 1 if existing else 0
 
     def enqueue(self, window_id: int, scalar_a: np.ndarray, scalar_b: np.ndarray):
         self._queue.put((window_id, scalar_a, scalar_b))
@@ -271,6 +277,7 @@ class Runner:
         data=None,
         data_path=None,
         pass_indexed_window: bool = False,
+        window_offset: int = 0,
         object_stride: int = 250,
         n_workers=None,
         max_in_flight=None,
@@ -285,6 +292,7 @@ class Runner:
 
         self._calc_fn      = calculation_fn
         self.pass_indexed_window = pass_indexed_window
+        self.window_offset = window_offset
         self.object_stride = object_stride
         self.n_workers     = n_workers or os.cpu_count() or 4
         self.max_in_flight = max_in_flight or self.n_workers * 8
@@ -317,6 +325,12 @@ class Runner:
             np.save(self._data_path, data.astype(DTYPE))
             self._data_len = data.shape[0]
 
+        self._window_ids = np.arange(
+            self.window_offset,
+            self.window_offset + self._data_len,
+            dtype=np.int64,
+        )
+
         _threshold = flush_threshold or self.n_workers * 4
         self._scalar_writer = ScalarWriter(self.temp_dir, flush_threshold=_threshold)
         self._object_writer = ObjectWriter(
@@ -335,7 +349,7 @@ class Runner:
         All workers stay fully utilised until the very last window.
         """
         completed = self._find_completed_windows()
-        remaining = [i for i in range(self._data_len) if i not in completed]
+        remaining = [i for i, window_id in enumerate(self._window_ids) if window_id not in completed]
 
         logger.info(
             "Windows total=%d  done=%d  remaining=%d  workers=%d",
@@ -366,11 +380,17 @@ class Runner:
                         nonlocal exhausted
                         while not exhausted and len(pending) < self.max_in_flight:
                             try:
-                                window_id = next(todo)
+                                window_pos = next(todo)
                             except StopIteration:
                                 exhausted = True
                                 break
-                            future = pool.submit(_worker, window_id, self._data_path)
+                            window_id = int(self._window_ids[window_pos])
+                            future = pool.submit(
+                                _worker,
+                                window_pos,
+                                window_id,
+                                self._data_path,
+                            )
                             pending[future] = window_id
 
                     _fill()
@@ -436,7 +456,8 @@ class Runner:
                 for wid in wids:
                     raw[wid] = (f[f"{wid}_a"].copy(), f[f"{wid}_b"].copy())
 
-        missing = set(range(self._data_len)) - raw.keys()
+        expected = set(int(window_id) for window_id in self._window_ids)
+        missing = expected - raw.keys()
         if missing:
             raise RuntimeError(
                 f"{len(missing)} window(s) missing scalars: "
