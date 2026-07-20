@@ -1,4 +1,5 @@
 *.ipynb
+!00_Inspection.ipynb
 *.log
 *.Identifier
 *.sh
