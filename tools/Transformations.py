@@ -23,8 +23,8 @@ def antithetic_variates(sample:np.ndarray, method:str="1-u")->np.ndarray:
             raise NotImplementedError(f"Method {method} not implemented!")
     return res
 
-
-@nb.njit(parallel=True, cache=True)
+#@nb.njit(parallel=False, cache=True)
+@nb.njit(parallel=True, cache=True) # Uses 1 thread by default (config.py) for full outer parallelization
 def empirical_ppf(sample, data_sorted):
     """
     A fast numba implementation of the inverse empirical re-transformation.

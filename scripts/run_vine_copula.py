@@ -26,10 +26,11 @@ _defaults = dict(
     family_set=[],
     selection_criterion="mbicv",
     preselect_families=True, # whether to exclude families based on symmetry of the data
-    select_trunc_lvl=False,
-    select_families=True,
+    select_trunc_lvl=False, # Automatically select trunc_lvl
+    select_families=True, # Always fit new
     allow_rotations=True,
-    select_threshold=True, # automatically select threshold for thresholded vines
+    select_threshold=False, # activate automatic threshold
+    threshold=0.0,
     num_threads=os.environ["PVC_NUM_THREADS"] #1 # Leave at 1 if using all cores, this is set in simulations.__init__
     )
 
@@ -51,7 +52,7 @@ def parse_args():
     parser.add_argument("-ws", "--window_size",type=int,required=False, default=250,help="Set the window size for the adjusted return calculation. Default: 250, i.e. use the past 250 adjusted returns to calculate the the next day risk forecasts.")
 
     # Vine controls
-    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, allow_rotations=True, select_threshold=True, num_threads=1, tree_criterion=tau, tau_tails=both. Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help=f"Overwrite the default vine copula controls. Possible entries with defaults include: {json.dumps(_defaults, separators=(',','=')).replace('{', '').replace('}', '')}. Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -79,7 +80,6 @@ def main():
     _defaults.update(args.controls)
     _defaults["family_set"] = VineCopula.build_family_set(args.copula_families)
     controls = pvc.FitControlsVinecop(**_defaults)
-
 
     # Collecting all arguments into params
     _params = {"portfolio":args.portfolio,

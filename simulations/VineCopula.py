@@ -1,7 +1,12 @@
+import logging
+
 import pyvinecopulib as pvc
 from tools.Transformations import antithetic_variates, ppf_transform
 from models.VineCopula import expected_shortfall, value_at_risk, VineCopulaResult, fit_custom_tail_vine, get_custom_trees, translate_custom_vine, extract_controlsbicop
 import numpy as np
+
+
+logger = logging.getLogger(__name__)
 
 
 _RND_KWARGS = ["seeds","num_threads","n","qrng"]

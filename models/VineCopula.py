@@ -145,9 +145,34 @@ def get_structure_changes(dists:list[float],threshold=0.0):
     return change_points
 
 
+class _PickleSafeVinecop:
+    """
+    Lightweight proxy that preserves a fitted vine's threshold across pickle.
+    pyvinecopulib does not preserve the threshold attribute when pickling, so this wrapper ensures that the threshold is retained.
+    """
+
+    def __init__(self, vine:pvc.Vinecop, threshold:float | None = None):
+        self._vine = vine
+        self._threshold = vine.threshold if threshold is None else threshold
+
+    @property
+    def threshold(self):
+        return self._threshold
+
+    def __getattr__(self, name):
+        return getattr(self._vine, name)
+
+    def __getstate__(self):
+        return {"vine": self._vine, "threshold": self._threshold}
+
+    def __setstate__(self, state):
+        self._vine = state["vine"]
+        self._threshold = state["threshold"]
+
+
 class VineCopulaResult:
     def __init__(self, vine:pvc.Vinecop):
-        self.vine = vine
+        self.vine = vine if isinstance(vine, _PickleSafeVinecop) else _PickleSafeVinecop(vine)
     
     def __repr__(self):
         return f"VineCopula(dim={self.vine.dim},trunc_lvl={self.vine.trunc_lvl},threshold={self.vine.threshold})"
