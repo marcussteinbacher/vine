@@ -48,11 +48,11 @@ def parse_args():
     parser.add_argument("-cf","--copula_families",nargs='+',choices=config.VINECOPFAMILIES,required=False,default=[],type=str,help="Restrict the set of bivariate copulas that can be used to predict VaR/ES. Deault: Empty, all families can be used.")
     parser.add_argument("-md","--margin_distribution",choices=config.MARGINDISTRIBUTIONS,required=True,type=str,help="Set the margin distribution. Used to re-transform the uniformly distributed copula random samples.")
     parser.add_argument("-n",type=int,required=False,default=100_000,help="Number of random samples drawn from copula to simulate VaR/ES. Default: 100_000")
-    parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
+    #parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
     parser.add_argument("-ws", "--window_size",type=int,required=False, default=250,help="Set the window size for the adjusted return calculation. Default: 250, i.e. use the past 250 adjusted returns to calculate the the next day risk forecasts.")
 
     # Vine controls
-    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help=f"Overwrite the default vine copula controls. Possible entries with defaults include: {json.dumps(_defaults, separators=(',','=')).replace('{', '').replace('}', '')}. Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help=f"Overwrite the default vine copula controls. Possible entries with defaults include: {json.dumps(_defaults, separators=(',','=')).replace('{', '').replace('}', '')}. Example: --controls trunc_lvl=7 selection_criterion=aic f0=3. Check pyvinecopulib.FitControlsVinecop, scipy. for details.")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -73,11 +73,16 @@ def parse_args():
 
 def main():
     args = parse_args()
-    args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+    #args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+    if "parametric_method" in args.controls.keys() and args.controls["parametric_method"] == "ml":
+        args.controls["parametric_method"] = "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
 
-
+    # Margin controls
+    f0 = args.controls.get("f0", None) # Margin distribution parameter, f0 is degree of freedom for Student margins
+    #args.controls = {k:v for k,v in args.controls.items() if k != "f0"} # Remove f0 from vine controls
+    
     # VineCopula controls
-    _defaults.update(args.controls)
+    _defaults.update({k:v for k,v in args.controls.items() if k in pvc.FitControlsVinecop.__dict__.keys()}) # Exclude unsupported tailtau criterion; the structure is pre-computed in simulate_vc_tailtau
     _defaults["family_set"] = VineCopula.build_family_set(args.copula_families)
     controls = pvc.FitControlsVinecop(**_defaults)
 
@@ -91,8 +96,9 @@ def main():
             "simulation": {
                 "name":_SIM,
                 "margin_distribution":args.margin_distribution,
+                "f0": f0, # Margin distribution parameter, f0 is degree of freedom for Student margins
                 "n":args.n,
-                "fit_method":args.fit_method,
+                #"fit_method":args.fit_method,
                 "alpha":args.alpha,
                 "risk_metric":[
                     "VaR",
@@ -145,6 +151,7 @@ def main():
                     margin_dist=args.margin_distribution,
                     n_samples=args.n,
                     alpha=args.alpha,
+                    f0=f0
                     )
 
     # Instantiate the runner
@@ -205,6 +212,7 @@ def main():
     # Save updated params.json to simulation folder
     with open(path+"params.json","wt") as f:
         json.dump(params.dict,f,indent=2)
+        print(path+"params.json written!")
     
     if not args.keep:
         runner.cleanup()

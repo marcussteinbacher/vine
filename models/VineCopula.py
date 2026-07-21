@@ -145,37 +145,13 @@ def get_structure_changes(dists:list[float],threshold=0.0):
     return change_points
 
 
-class _PickleSafeVinecop:
-    """
-    Lightweight proxy that preserves a fitted vine's threshold across pickle.
-    pyvinecopulib does not preserve the threshold attribute when pickling, so this wrapper ensures that the threshold is retained.
-    """
-
-    def __init__(self, vine:pvc.Vinecop, threshold:float | None = None):
-        self._vine = vine
-        self._threshold = vine.threshold if threshold is None else threshold
-
-    @property
-    def threshold(self):
-        return self._threshold
-
-    def __getattr__(self, name):
-        return getattr(self._vine, name)
-
-    def __getstate__(self):
-        return {"vine": self._vine, "threshold": self._threshold}
-
-    def __setstate__(self, state):
-        self._vine = state["vine"]
-        self._threshold = state["threshold"]
-
-
 class VineCopulaResult:
-    def __init__(self, vine:pvc.Vinecop):
-        self.vine = vine if isinstance(vine, _PickleSafeVinecop) else _PickleSafeVinecop(vine)
+    def __init__(self, vine:pvc.Vinecop, threshold=None):
+        self.vine = vine
+        self.threshold=threshold # threshold cannot be pickles by vinecopulib, so we store it separately
     
     def __repr__(self):
-        return f"VineCopula(dim={self.vine.dim},trunc_lvl={self.vine.trunc_lvl},threshold={self.vine.threshold})"
+        return f"VineCopula(dim={self.vine.dim},trunc_lvl={self.vine.trunc_lvl},threshold={self.threshold})"
     
 # -----------------------
 # Tail-thresholded Kendall's tau and related functions for building a custom vine structure.
@@ -228,13 +204,13 @@ def compute_tail_tau_matrix(data, threshold=0.25, tail='lower'):
     return matrix
 
 
-def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, threshold=0.25, tail='lower'):
+def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, threshold, tail_quantile=0.25, tail='lower'):
     """
     Fit a custom vine structure using the tail-thresholded Kendall's tau.
     """
     n, d = u_data.shape
 
-    tail_tau_matrix = compute_tail_tau_matrix(u_data, threshold=threshold, tail=tail)
+    tail_tau_matrix = compute_tail_tau_matrix(u_data, threshold=tail_quantile, tail=tail)
     
     # Store all fitted edges grouped by tree level
     vines_by_tree = {}
@@ -268,8 +244,14 @@ def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, thres
         tailtau = attr["tailtau"]
         current_layer_tailtaus.append(tailtau)
 
-        bicop = pvc.Bicop()
-        bicop.select(pair_data, controls)
+#--> HERE
+        # If tailtau <= threshold, use indep, else use bicop
+        if np.abs(tailtau) <= threshold:
+            bicop = pvc.Bicop(pvc.indep)
+            #print("TAILTAU BELOW THRESHOLD, USING INDEP")
+        else:
+            bicop = pvc.Bicop()
+            bicop.select(pair_data, controls)
         
         # hfunc1: u given v | hfunc2: v given u
         h1 = bicop.hfunc1(pair_data)  
@@ -356,6 +338,14 @@ def fit_custom_tail_vine(u_data, controls:pvc.FitControlsBicop, trunc_lvl, thres
             pair_data = np.column_stack([u_A, u_B])
 
 # --> HERE
+            # If tailtau <= threshold, use independence copula; else fit a bicopula
+            if np.abs(attr['tailtau']) <= threshold:
+                bicop = pvc.Bicop(pvc.indep)
+                #print("TAILTAU BELOW THRESHOLD, USING INDEP")
+            else:
+                bicop = pvc.Bicop()
+                bicop.select(pair_data, controls)
+            
             # If trunc_lvl reached use independence copula
             if tree_idx > trunc_lvl:
                 bicop = pvc.Bicop(pvc.indep) 

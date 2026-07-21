@@ -35,7 +35,8 @@ _defaults = dict(
     select_families=True,
     allow_rotations=True,
     tree_criterion="tau",
-    select_threshold=True, # automatically select threshold for thresholded vines
+    select_threshold=False, # automatically select threshold for thresholded vines
+    threshold=0.0,
     num_threads=os.environ["PVC_NUM_THREADS"], #1 # Leave at 1 if using all cores, this is set in simulations.__init__
     )
 
@@ -53,11 +54,11 @@ def parse_args():
     parser.add_argument("-cf","--copula_families",nargs='+',choices=config.VINECOPFAMILIES,required=False,default=[],type=str,help="Restrict the set of bivariate copulas that can be used to predict VaR/ES. Deault: Empty, all families can be used.")
     parser.add_argument("-md","--margin_distribution",choices=config.MARGINDISTRIBUTIONS,required=True,type=str,help="Set the margin distribution. Used to re-transform the uniformly distributed copula random samples.")
     parser.add_argument("-n",type=int,required=False,default=100_000,help="Number of random samples drawn from copula to simulate VaR/ES. Default: 100_000")
-    parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
+    #parser.add_argument("-fm","--fit_method",type=str,required=False,default="itau",choices=["ml","itau"],help="Choose the vine copula fitting method. Default: itau.")
     parser.add_argument("-ws", "--window_size",type=int,required=False, default=250,help="Set the window size for the adjusted return calculation. Default: 250, i.e. use the past 250 adjusted returns to calculate the the next day risk forecasts.")
 
     # Vine controls
-    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, allow_rotations=True, select_threshold=True, num_threads=1, tau_quantile=0.25, tau_tails=both . Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, allow_rotations=True, select_threshold=True, num_threads=1, tail_quantile=0.25, tails=both . Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -78,12 +79,16 @@ def parse_args():
 
 def main():
     args = parse_args()
-    args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+    #args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
+    if "parametric_method" in args.controls.keys() and args.controls["parametric_method"] == "ml":
+        args.controls["parametric_method"] = "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
 
+    # Margin controls
+    f0 = args.controls.get("f0", None) # Margin distribution parameter, f0 is degree of freedom for Student margins
+    #args.controls = {k:v for k,v in args.controls.items() if k != "f0"} # Remove f0 from vine controls
 
     # VineCopula controls
-    _defaults.update({k:v for k,v in args.controls.items() if k in pvc.FitControlsVinecop.__dict__.keys()})
-    # Exclude unsupported tailtau criterion; the structure is pre-computed in simulate_vc_tailtau
+    _defaults.update({k:v for k,v in args.controls.items() if k in pvc.FitControlsVinecop.__dict__.keys()}) # Exclude unsupported tailtau criterion; the structure is pre-computed in simulate_vc_tailtau
     _defaults["family_set"] = VineCopula.build_family_set(args.copula_families)
     controls = pvc.FitControlsVinecop(**_defaults)
 
@@ -91,8 +96,8 @@ def main():
     _my_controls = VineCopula.get_controls(controls) #dict
     _my_controls.update({"tree_criterion":"tailtau",
                          "tree_algorithm":"mst_prim",
-                         "tau_quantile":args.controls["tau_quantile"] if "tau_quantile" in args.controls.keys() else 0.2,
-                         "tau_tails":args.controls["tau_tails"] if "tau_tails" in args.controls.keys() else "both"
+                         "tail_quantile":args.controls["tail_quantile"] if "tail_quantile" in args.controls.keys() else 0.25, #Default tail_quantile 25%
+                         "tails":args.controls["tails"] if "tails" in args.controls.keys() else "both"
                          })
 
     _params = {"portfolio":args.portfolio,
@@ -104,8 +109,9 @@ def main():
             "simulation": {
                 "name":_SIM,
                 "margin_distribution":args.margin_distribution,
+                "f0": f0,
                 "n":args.n,
-                "fit_method":args.fit_method,
+                #"fit_method":args.fit_method,
                 "alpha":args.alpha,
                 "risk_metric":[
                     "VaR",
@@ -159,8 +165,9 @@ def main():
                     margin_dist=args.margin_distribution,
                     n_samples=args.n,
                     alpha=args.alpha,
-                    tau_quantile=params.controls.tau_quantile,
-                    tau_tails=params.controls.tau_tails
+                    tail_quantile=params.controls.tail_quantile,
+                    tails=params.controls.tails,
+                    f0=f0
                     )
 
     # Instantiate the runner
@@ -224,6 +231,7 @@ def main():
     # Finally clean temp files if all operations completed successfully and --keep is not set
     if not args.keep:
         runner.cleanup()
+        print("Temporary files cleaned up!")
     
 
 if __name__ == "__main__":

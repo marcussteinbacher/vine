@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument("-ws", "--window_size",type=int,required=False, default=250,help="Set the window size for the adjusted return calculation. Default: 250, i.e. use the past 250 adjusted returns to calculate the the next day risk forecasts.")
 
     # Vine controls. A indep vine-copula doesnt need any controls
-    #parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries w/ defaults include: parametric_method=itau, selection_criterion=mbicv, trunc_lvl=None, preselect_families=True, select_trunc_lvl=False, select_families=True, allow_rotations=True, select_threshold=True, num_threads=1, tree_criterion=tau. Example: --controls trunc_lvl=7 selection_criterion=aic. Check pyvinecopulib.FitControlsVinecop for details.")
+    parser.add_argument("--controls",nargs="+",required=False,default={}, action=StoreDict,help="Overwrite the default vine copula controls. Possible entries include: f0 for Student t margins")
 
     # Risk metric params
     parser.add_argument("-a","--alpha",required=False,type=float,default=0.01,help="Set alpha for the desired alpha-level VaR/ES, default 0.01 for the 1%%-VaR/ES.")
@@ -74,6 +74,9 @@ def main():
     args = parse_args()
     #args.fit_method = args.fit_method if args.fit_method == "itau" else "mle" # for API consistency: pyvinecopulib uses mle, copulae uses ml for maxmium-likelihood
 
+    # Margin controls
+    f0 = args.controls.get("f0", None) # Margin distribution parameter, f
+
     # Collecting all arguments into params
     _params = {"portfolio":args.portfolio,
           "volatility": {
@@ -84,6 +87,7 @@ def main():
             "simulation": {
                 "name":_SIM,
                 "margin_distribution":args.margin_distribution,
+                "f0":f0,
                 "n":args.n,
                 #"fit_method":args.fit_method,
                 "alpha":args.alpha,
@@ -137,6 +141,7 @@ def main():
                     margin_dist=args.margin_distribution,
                     n_samples=args.n,
                     alpha=args.alpha,
+                    f0=f0
                     )
 
     # Instantiate the runner

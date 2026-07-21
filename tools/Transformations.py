@@ -62,6 +62,7 @@ def ppf_transform(sample:np.ndarray, data:np.ndarray, distribution:str,**fit_kwa
     - trans: Sample transformed back to its original margin-distributions.
     - margin_params: Parameters of the original margin-distributions.
     """
+
     match distribution:
         case "norm"|"Normal":
             mu, sd = data.mean(axis=0), data.std(axis=0)
